@@ -1,0 +1,92 @@
+{
+  "app": {
+    "signingConfigs": [
+      {
+        "name": "default",
+        "type": "HarmonyOS",
+        "material": {
+          "certpath": "C:\\Users\\PushCat\\.ohos\\config\\default_FlexibleAggregateList_XILiVGhKsexAP8IFzlnnuuR0klvFp9wLsaE03F90q6o=.cer",
+          "keyAlias": "debugKey",
+          "keyPassword": "0000001B44306C66A7FED3C5FE7FA23E245395A6E3DF5CE76A650C872C0F2E1128697EAB6CFBD69BD3C74F",
+          "profile": "C:\\Users\\PushCat\\.ohos\\config\\default_FlexibleAggregateList_XILiVGhKsexAP8IFzlnnuuR0klvFp9wLsaE03F90q6o=.p7b",
+          "signAlg": "SHA256withECDSA",
+          "storeFile": "C:\\Users\\PushCat\\.ohos\\config\\default_FlexibleAggregateList_XILiVGhKsexAP8IFzlnnuuR0klvFp9wLsaE03F90q6o=.p12",
+          "storePassword": "0000001B5E6091BE560E48920A89B4BCB89411F1E5EE8D950CE2CDD941A0C9F1489A5C37F7E2A82DF5B1A6"
+        }
+      }
+    ],
+    "products": [
+      {
+        "name": "default",
+        "signingConfig": "default",
+        "targetSdkVersion": "6.0.2(22)",
+        "compatibleSdkVersion": "6.0.2(22)",
+        "runtimeOS": "HarmonyOS",
+        "buildOption": {
+          "strictMode": {
+            "caseSensitiveCheck": true,
+            "useNormalizedOHMUrl": true
+          }
+        }
+      }
+    ],
+    "buildModeSet": [
+      {
+        "name": "debug",
+      },
+      {
+        "name": "release"
+      }
+    ]
+  },
+  "modules": [
+    {
+      "name": "default",
+      "srcPath": "./products/default",
+      "targets": [
+        {
+          "name": "default",
+          "applyToProducts": [
+            "default"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "common",
+      "srcPath": "./common",
+      "targets": [
+        {
+          "name": "default",
+          "applyToProducts": [
+            "default"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "adaptiveLayout",
+      "srcPath": "./features/adaptiveLayout",
+      "targets": [
+        {
+          "name": "default",
+          "applyToProducts": [
+            "default"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "responsiveLayout",
+      "srcPath": "./features/responsiveLayout",
+      "targets": [
+        {
+          "name": "default",
+          "applyToProducts": [
+            "default"
+          ]
+        }
+      ]
+    }
+  ]
+}
