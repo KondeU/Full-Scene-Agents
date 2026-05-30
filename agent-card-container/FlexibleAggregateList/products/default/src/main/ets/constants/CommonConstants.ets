@@ -28,6 +28,16 @@ interface CommonConstantsInterface {
   adaptiveColumnHeight: string;
   adaptiveFlexibleColumnWidth: string;
   adaptiveFlexShrink: number;
+  AGENT_CARDS_ROOT: string;
+  LIST_DIR_NAME: string;
+  CONFIG_FILE_NAME: string;
+  CARD_BORDER_RADIUS: number;
+  CARD_GAP: number;
+  TITLE_FONT_SIZE: number;
+  TITLE_FONT_WEIGHT: number;
+  LINE_FONT_SIZE: number;
+  LINE_FONT_WEIGHT: number;
+  DEFAULT_ASCENDING_ORDER: boolean;
 }
 
 /**
@@ -177,5 +187,16 @@ export const commonConstants: CommonConstantsInterface = {
   /**
    * The value of shrink of column component.
    */
-  adaptiveFlexShrink: 1
+  adaptiveFlexShrink: 1,
+
+  AGENT_CARDS_ROOT: 'storage/media/100/local/files/Docs/Download/AgentCards',
+  LIST_DIR_NAME: 'list',
+  CONFIG_FILE_NAME: 'config.json',
+  CARD_BORDER_RADIUS: 16,
+  CARD_GAP: 12,
+  TITLE_FONT_SIZE: 16,
+  TITLE_FONT_WEIGHT: FontWeight.Bold,
+  LINE_FONT_SIZE: 14,
+  LINE_FONT_WEIGHT: FontWeight.Regular,
+  DEFAULT_ASCENDING_ORDER: true,
 };

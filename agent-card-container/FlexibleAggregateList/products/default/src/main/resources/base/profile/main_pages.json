@@ -4,7 +4,6 @@
     "pages/AdaptiveIndex",
     "pages/ResponsiveIndex",
     "pages/SystemCapabilitiesIndex",
-    "pages/AgentAppListPage",
     "pages/AgentAppDetailPage"
   ]
 }
