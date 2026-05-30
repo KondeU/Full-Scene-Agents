@@ -16,17 +16,18 @@ Agent 输出 ──→ JSON 文件 ──→ UI 槽位渲染 ──→ 用户可
 ### 2.1 目录结构
 
 ```
-storage/media/100/local/files/Docs/AgentCards/
-├── 1.快递信息聚合主动提醒/          ← AgentApp 目录
+AGENT_CARDS_ROOT/                          ← 常量 AGENT_CARDS_ROOT = "storage/media/100/local/files/Docs/Download/AgentCards"
+├── 1.快递信息聚合主动提醒/               ← AgentApp 目录
+│   ├── config.json                        ← 通用配置槽位
 │   ├── list/
-│   │   ├── 1.json                  ← 卡片数据槽位
-│   │   ├── 2.json                  ← 卡片数据槽位
-│   │   ├── 3.json                  ← 卡片数据槽位
-│   │   └── ...                     ← 按数字编号, 可动态增减
-│   ├── config.json                 ← 通用配置
-│   ├── action.js                   ← 行为槽位: 卡片按钮触发脚本
-│   └── take.js                     ← 行为槽位: 图片导入触发脚本
+│   │   ├── 1.json                         ← 卡片数据槽位
+│   │   ├── 2.json                         ← 卡片数据槽位
+│   │   ├── 3.json                         ← 卡片数据槽位
+│   │   └── ...                            ← 按数字编号, 可动态增减
+│   ├── action.js                          ← 行为槽位: 卡片按钮触发脚本
+│   └── take.js                            ← 行为槽位: 图片导入触发脚本
 ├── 2.另一个Agent应用/
+│   ├── config.json
 │   ├── list/
 │   │   ├── 1.json
 │   │   └── ...
@@ -42,8 +43,25 @@ storage/media/100/local/files/Docs/AgentCards/
 | AgentApp 目录 | `[number].[agent_app_name]` | `number` 用于内部标识和排序遍历，`agent_app_name` 为展示名称 |
 | 卡片数据文件 | `[number].json` | 位于 `list/` 子目录下，`number` 为卡片编号，也是 action 脚本的入参 |
 | 行为脚本 | `action.js` / `take.js` | 位于 AgentApp 目录下，为预留的行为槽位 |
+| 通用配置 | `config.json` | 位于 AgentApp 目录下，为预留的配置槽位 |
 
-### 2.3 卡片 JSON 数据格式
+### 2.3 config.json 配置格式
+
+每个 AgentApp 目录下可选的配置文件，不存在时所有字段按默认值处理：
+
+```json
+{
+  "ascendingOrder": true
+}
+```
+
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| ascendingOrder | boolean | true | 卡片排序方向，true=升序(number从小到大)，false=降序(number从大到小) |
+
+> 后续可扩展更多配置字段，UI 框架按字段存在性决定是否使用，不存在则 fallback 到默认值。
+
+### 2.4 卡片 JSON 数据格式
 
 每个 `[number].json` 文件为一个卡片的数据槽位：
 
@@ -61,9 +79,37 @@ storage/media/100/local/files/Docs/AgentCards/
 | title | string | 卡片标题栏文本 | 是 |
 | line0 | string | 卡片第一行文本 | 是 |
 | line1 | string | 卡片第二行文本 | 否 (空则不渲染) |
-| buttonText | string | 按钮显示文本 | 否 (空则不渲染，不响应按钮点击) |
+| buttonText | string | 按钮显示文本 | 否 (空则不渲染按钮，不响应点击) |
 
 > 后续可扩展更多字段（如 line2、icon、status 等），UI 框架按字段存在性决定是否渲染对应槽位。
+
+### 2.5 脚本函数入口约定
+
+`action.js` 和 `take.js` 必须导出约定的函数入口名：
+
+**action.js**：
+```javascript
+function action(cardNumber) {
+  // cardNumber: 卡片编号, 如 1
+  // 后期可自定义行为逻辑
+}
+```
+
+**take.js**：
+```javascript
+function take(imageUri) {
+  // imageUri: 图片 URI/路径, 如 "file:///storage/media/100/local/files/Docs/photo.jpg"
+  // 后期可自定义行为逻辑
+}
+```
+
+脚本通过 WebJS 引擎加载执行。UI 框架读取脚本文件内容后，通过 `evaluateJs` 拼接调用：
+```
+evaluateJs(scriptContent + "; action(" + cardNumber + ")")
+evaluateJs(scriptContent + "; take('" + imageUri + "')")
+```
+
+脚本不存在时，console log 输出警告信息，UI 不做额外提示。
 
 ## 3. 页面与交互流程
 
@@ -76,36 +122,40 @@ storage/media/100/local/files/Docs/AgentCards/
 
 ### 3.2 主页 — AgentApp 列表
 
-用户点击应用图标后进入主页，展示 `AgentCards` 目录下所有子目录名称。
+用户点击应用图标后进入主页，展示 `AGENT_CARDS_ROOT` 目录下所有子目录名称。
 
 ```
 ┌───────────────────────────────────┐
-│    AgentCards                     │  ← 标题栏 (无返回按钮, 此为入口页)
+│    AgentCards              [🔄]   │  ← 标题栏 + 右上角刷新按钮
 │                                   │
 │  ┌─────────────────────────────┐  │
-│  │  📦 快递信息聚合主动提醒     │  │  ← 目录名 "1.快递信息聚合主动提醒"
-│  │     (取 agent_app_name 展示) │  │    前缀 "1." 不展示, 仅内部排序用
+│  │  快递信息聚合主动提醒       │  │  ← 目录名 "1.快递信息聚合主动提醒"
+│  │                              │  │    前缀 "1." 不展示, 仅内部排序用
 │  └─────────────────────────────┘  │
 │                                   │
 │  ┌─────────────────────────────┐  │
-│  │  📰 另一个Agent应用          │  │
+│  │  另一个Agent应用             │  │
 │  └─────────────────────────────┘  │
 │                                   │
 │  ┌─────────────────────────────┐  │
-│  │  🔍 ...                     │  │
+│  │  ...                        │  │
 │  └─────────────────────────────┘  │
 │                                   │
-│  (列表按 number 排序, 可滚动)      │
+│  (列表按 number 升序排列, 可滚动)  │
+│                                   │
+│  若目录为空: "暂无AgentApp"        │
 └───────────────────────────────────┘
 ```
 
 **交互流程**：
 ```
-1. 遍历 AgentCards 目录下的子目录
+1. 遍历 AGENT_CARDS_ROOT 目录下的子目录
 2. 解析 "[number].[agent_app_name]" 格式
 3. 按 number 升序排列
 4. 列表项展示 agent_app_name (去掉前缀 number 和 ".")
 5. 点击列表项 → Router.pushUrl(AgentAppDetailPage, { dirName: "1.快递信息聚合主动提醒" })
+6. 点击刷新按钮 → 重新扫描目录并刷新列表
+7. 从后台切回前台 → onPageShow 自动触发一次刷新
 ```
 
 ### 3.3 展示页 — AgentApp 详情 (双 Tab)
@@ -114,7 +164,7 @@ storage/media/100/local/files/Docs/AgentCards/
 
 ```
 ┌───────────────────────────────────┐
-│  ← 快递信息聚合主动提醒           │  ← 顶部导航: 返回按钮 + 当前 AgentApp 名称
+│  ← 快递信息聚合主动提醒    [🔄]  │  ← 顶部导航: 返回按钮 + AgentApp名称 + 刷新按钮
 │                                   │
 │  ┌─────────────────────────────┐  │
 │  │                             │  │  ← Tab 内容区
@@ -124,7 +174,7 @@ storage/media/100/local/files/Docs/AgentCards/
 │  └─────────────────────────────┘  │
 │                                   │
 │  ┌──────────┬──────────────────┐  │
-│  │  卡片列表 │    图片导入      │  │  ← 底部 TabBar
+│  │  卡片列表 │    图片导入      │  │  ← 底部 TabBar (固定两个Tab)
 │  └──────────┴──────────────────┘  │
 └───────────────────────────────────┘
 ```
@@ -135,25 +185,27 @@ storage/media/100/local/files/Docs/AgentCards/
 
 ```
 ┌───────────────────────────────────┐
-│  ← 快递信息聚合主动提醒           │
+│  ← 快递信息聚合主动提醒    [🔄]  │
 │                                   │
 │  ┌─────────────────────────────┐  │
 │  │  幸福里1栋快递驿站          │  │  ← title (标题栏)
 │  │  取件码: 3-1-8810、5-2-3316 │  │  ← line0
 │  │  驿站营业时间: 8:00~20:00    │  │  ← line1
-│  │                    [我已取件]│  │  ← buttonText → 点击执行 action 脚本
+│  │                    [我已取件]│  │  ← buttonText → 点击执行 action.js
 │  └─────────────────────────────┘  │
 │                                   │
 │  ┌─────────────────────────────┐  │
 │  │  科技园A区快递驿站          │  │
-│  │  运单号: 1-1088          │  │
-│  │  驿站营业时间: 7:00~19:00 │  │
+│  │  运单号: 1-1088             │  │
+│  │  驿站营业时间: 7:00~19:00    │  │
 │  │                    [我已取件]│  │
 │  └─────────────────────────────┘  │
 │                                   │
 │  ┌─────────────────────────────┐  │
-│  │  ...更多卡片...              │  │  ← 按 number 排序, 可滚动
+│  │  ...更多卡片...              │  │  ← 按 config.json 中 ascendingOrder 排序
 │  └─────────────────────────────┘  │
+│                                   │
+│  若列表为空: "暂无卡片数据"        │
 │                                   │
 │  ┌──────────┬──────────────────┐  │
 │  │  卡片列表 │    图片导入      │  │
@@ -168,18 +220,18 @@ storage/media/100/local/files/Docs/AgentCards/
 │  title                      │  ← 标题栏 (强调色/加粗)
 │                             │
 │  line0                      │  ← 第一行文本
-│  line1                      │  ← 第二行文本 (可选)
+│  line1                      │  ← 第二行文本 (可选, 无则不渲染)
 │                             │
-│                   [buttonText]│  ← 按钮, 右对齐
+│                   [buttonText]│  ← 按钮, 右对齐 (可选, 无则不渲染)
 └─────────────────────────────┘
 ```
 
 **按钮交互流程**：
 ```
 用户点击卡片按钮 → 读取卡片编号 [number]
-→ 执行同目录下的 action 脚本
-→ 入参: [number] (该卡片的编号)
-→ action 脚本为预留槽位, 后期可自定义行为，通过WebJS引擎加载脚本执行
+→ 读取 action.js 脚本文件内容
+→ WebJS 引擎 evaluateJs(scriptContent + "; action(" + number + ")")
+→ action.js 为预留槽位, 后期可自定义行为
 ```
 
 #### Tab 2: 图片导入
@@ -188,7 +240,7 @@ storage/media/100/local/files/Docs/AgentCards/
 
 ```
 ┌───────────────────────────────────┐
-│  ← 快递信息聚合主动提醒           │
+│  ← 快递信息聚合主动提醒    [🔄]  │
 │                                   │
 │  ┌─────────────────────────────┐  │
 │  │                             │  │
@@ -199,8 +251,7 @@ storage/media/100/local/files/Docs/AgentCards/
 │  │     └─────────────────┘     │  │
 │  │                             │  │
 │  │  ┌──────┐    ┌──────────┐  │  │
-│  │  │ 📷   │    │ 🖼️      │  │  │  ← 拍照 / 相册按钮
-│  │  │ 拍照 │    │ 从相册选择│  │  │
+│  │  │ 拍照 │    │ 从相册选择│  │  │  ← 拍照 / 相册按钮
 │  │  └──────┘    └──────────┘  │  │
 │  │                             │  │
 │  └─────────────────────────────┘  │
@@ -215,21 +266,21 @@ storage/media/100/local/files/Docs/AgentCards/
 ```
 用户选择拍照或从相册导入 → 获取图片 URI
 → 图片预览区展示选中图片
-→ 执行 take 脚本
-→ 入参: 图片 (URI/路径)
-→ take 脚本为预留槽位, 后期可自定义行为，通过WebJS引擎加载脚本执行
+→ 读取 take.js 脚本文件内容
+→ WebJS 引擎 evaluateJs(scriptContent + "; take('" + imageUri + "')")
+→ take.js 为预留槽位, 后期可自定义行为
 ```
 
 ## 4. 完整交互时序
 
 ```
 ┌─────────┐     ┌──────────┐     ┌───────────┐     ┌──────────┐
-│  用户    │     │  UI框架   │     │  文件系统  │     │ 脚本槽位 │
+│  用户    │     │  UI框架   │     │  文件系统  │     │ WebJS引擎│
 └────┬────┘     └─────┬────┘     └─────┬─────┘     └────┬─────┘
      │                │                │                │
      │ 点击App图标    │                │                │
      │──────────────→│                │                │
-     │                │ 遍历AgentCards │                │
+     │                │ 遍历AGENT_CARDS_ROOT             │
      │                │──────────────→│                │
      │                │ 子目录列表     │                │
      │                │←─────────────│                │
@@ -238,6 +289,10 @@ storage/media/100/local/files/Docs/AgentCards/
      │                │                │                │
      │ 点击列表项     │                │                │
      │──────────────→│                │                │
+     │                │ 读取config.json│                │
+     │                │──────────────→│                │
+     │                │ config或不存在 │                │
+     │                │←─────────────│                │
      │                │ 遍历list/*.json│                │
      │                │──────────────→│                │
      │                │ JSON卡片数据   │                │
@@ -247,48 +302,60 @@ storage/media/100/local/files/Docs/AgentCards/
      │                │                │                │
      │ 点击卡片按钮   │                │                │
      │──────────────→│                │                │
-     │                │ 执行action脚本 │                │
-     │                │──────────────────────────────→│
-     │                │ 入参: [number] │                │
+     │                │ 读取action.js  │                │
+     │                │──────────────→│                │
+     │                │ action.js内容  │                │
+     │                │←─────────────│                │
+     │                │ evaluateJs(actionScript + "; action(N)")│
      │                │──────────────────────────────→│
      │                │                │                │
      │ (Tab2) 拍照/选图│                │                │
      │──────────────→│                │                │
-     │                │ 执行take脚本   │                │
+     │                │ 读取take.js    │                │
+     │                │──────────────→│                │
+     │                │ take.js内容    │                │
+     │                │←─────────────│                │
+     │                │ evaluateJs(takeScript + "; take('imageUri')")│
      │                │──────────────────────────────→│
-     │                │ 入参: 图片     │                │
-     │                │──────────────────────────────→│
+     │                │                │                │
+     │ 点击刷新按钮   │                │                │
+     │──────────────→│ 重新扫描目录   │                │
+     │                │──────────────→│                │
+     │ 刷新后的列表   │                │                │
+     │←──────────────│                │                │
+     │                │                │                │
+     │ (从后台切回前台)│                │                │
+     │ onPageShow     │ 自动触发刷新   │                │
+     │──────────────→│──────────────→│                │
 ```
 
-## 5. 数据实时更新机制
+## 5. 数据刷新机制
 
-Agent 在后台运行时可能持续写入新的 JSON 文件或更新已有 JSON，UI 需能实时反映变化。
+不做文件监听或定时轮询，采用以下组合策略：
 
-### 5.1 更新策略
+| 策略 | 触发方式 | 说明 |
+|------|---------|------|
+| **手动刷新** | 页面右上角刷新按钮 | 用户主动点击触发扫描目录并刷新 |
+| **自动刷新** | `onPageShow` 生命周期 | 从后台切回前台时自动触发一次刷新，用户无感知 |
 
-| 策略 | 说明 | 适用场景 |
-|------|------|---------|
-| **文件监听** | 使用 HarmonyOS `fileio.watchFile` 监听目录变化 | 文件增删改时自动触发 UI 刷新 |
-| **定时轮询** | 设置定时器 (如 3s) 定期遍历 list 目录 | fileio.watchFile 不可用时的备选方案 |
-| **手动刷新** | 提供刷新按钮供用户主动触发 | 降级兜底 |
-
-**推荐组合**：文件监听为主 + 手动刷新为兜底。
-
-### 5.2 更新时序
-
+**刷新逻辑**：
 ```
-Agent 写入 3.json ──→ fileio 通知目录变更
-──→ UI 读取 3.json ──→ 解析 JSON ──→ 新增卡片渲染到列表末尾
-──→ 用户看到新卡片出现
-
-Agent 更新 1.json ──→ fileio 通知文件变更
-──→ UI 重新读取 1.json ──→ 解析 JSON ──→ 更新已有卡片内容
-──→ 用户看到卡片内容刷新
+触发刷新 → 重新扫描 AGENT_CARDS_ROOT 子目录 (主页)
+         → 或重新扫描 list/*.json + 读取 config.json (展示页)
+         → 解析 JSON → 更新 @State 数据 → UI 自动重渲染
 ```
 
-## 6. 组件与模块设计
+**错误处理**：JSON 解析失败、脚本不存在、脚本执行失败等异常，均在 console log 中详细记录，不做 UI 层面的错误提示弹窗。
 
-### 6.1 数据模型
+## 6. 权限与安全
+
+- **目录访问权限**：通过固定权限声明（`module.json5` 中声明），用户安装应用时授权，赋予 `AGENT_CARDS_ROOT` 目录的读写访问权限
+- **脚本执行**：通过 WebJS 引擎绕过鸿蒙 HAP 沙箱限制，脚本在 Web 组件的 JS 上下文中执行
+- **路径常量**：`AGENT_CARDS_ROOT` 路径定义为字符串常量，代码中统一引用，避免硬编码散落各处
+
+## 7. 组件与模块设计
+
+### 7.1 数据模型
 
 ```typescript
 // AgentApp 目录项
@@ -305,22 +372,27 @@ class CardData {
   title: string;             // 标题栏
   line0: string;             // 第一行文本
   line1?: string;            // 第二行文本 (可选)
-  buttonText: string;        // 按钮文本
+  buttonText?: string;       // 按钮文本 (可选)
   sourcePath: string;        // JSON 文件完整路径
+}
+
+// AgentApp 配置 (对应 config.json, 所有字段有默认值)
+class AgentAppConfig {
+  ascendingOrder: boolean = true;  // 卡片排序方向, 默认升序
 }
 ```
 
-### 6.2 核心组件
+### 7.2 核心组件
 
 ```
 AgentAppListComponent    ← 主页列表组件, 渲染 AgentAppEntry[]
-AgentCardComponent       ← 单个卡片组件, 渲染 CardData (title + line1 + line2 + button)
-CardListComponent        ← 卡片聚合列表组件, 渲染 CardData[]
+AgentCardComponent       ← 单个卡片组件, 渲染 CardData (title + line0 + line1 + button)
+CardListComponent        ← 卡片聚合列表组件, 渲染 CardData[] (含空态提示)
 ImageImportComponent     ← 图片导入组件, 拍照/相册选择 + 预览
 AgentAppDetailView       ← 展示页整体布局, 组合 Tab + CardList + ImageImport
 ```
 
-### 6.3 模块划分
+### 7.3 模块划分
 
 ```
 features/
@@ -333,24 +405,23 @@ features/
 │   │   │   ├── ImageImportComponent.ets       ← 图片导入
 │   │   │   └── AgentAppDetailView.ets         ← 展示页双Tab布局
 │   │   ├── viewmodel/
-│   │   │   ├── AgentAppListViewModel.ets      ← 遍历AgentCards目录, 解析子目录
+│   │   │   ├── AgentAppListViewModel.ets      ← 遍历目录, 解析子目录
 │   │   │   ├── CardListViewModel.ets          ← 遍历list/*.json, 解析卡片数据
-│   │   │   └── ScriptExecutor.ets             ← 执行action/take脚本
+│   │   │   └── ScriptExecutor.ets             ← WebJS引擎加载执行脚本
 │   │   ├── model/
 │   │   │   ├── AgentAppEntry.ets              ← AgentApp目录项模型
 │   │   │   ├── CardData.ets                   ← 卡片数据模型
+│   │   │   ├── AgentAppConfig.ets             ← 配置模型
 │   │   │   └── ScriptSlot.ets                 ← 脚本槽位模型
 │   │   ├── utils/
-│   │   │   ├── FileSystemWatcher.ets          ← 文件监听/定时轮询
-│   │   │   ├── JsonParser.ets                 ← JSON解析与校验
-│   │   │   └── DirectoryScanner.ets           ← 目录遍历与排序
+│   │   │   ├── DirectoryScanner.ets           ← 目录遍历与排序
+│   │   │   └── JsonParser.ets                 ← JSON解析与校验
 │   │   ├── constants/
-│   │   │   └── CommonConstants.ets
+│   │   │   └── CommonConstants.ets            ← 含 AGENT_CARDS_ROOT 等路径常量
 │   │   └── pages/
 │   │       ├── AgentAppListPage.ets           ← 主页入口
 │   │       └── AgentAppDetailPage.ets         ← 展示页
 │   └── Index.ets
-
 │
 ├── responsiveLayout/      ← 保留
 ├── adaptiveLayout/        ← 保留
@@ -363,7 +434,7 @@ common/
 │   ├── constants/CommonConstants.ets
 ```
 
-## 7. 响应式适配
+## 8. 响应式适配
 
 继承现有 BreakpointSystem (sm/md/lg/xl)，在展示页做差异化布局：
 
@@ -374,35 +445,37 @@ common/
 | lg (840-1320vp) | 双列卡片网格 | 预览区+按钮横向 | 平板 |
 | xl (≥1320vp) | 三列卡片网格 | 预览区+按钮横向 | PC/智慧屏 |
 
-## 8. 脚本槽位机制
+## 9. 脚本槽位机制
 
-### 8.1 action 槽位
+### 9.1 action 槽位
 
 - **触发时机**：用户点击卡片按钮
 - **脚本位置**：`AgentCards/[number].[agent_app_name]/action.js`
-- **入参**：卡片的 `[number]` 编号
+- **函数入口**：`function action(cardNumber)` — cardNumber 为卡片编号
+- **执行方式**：读取脚本文件内容 → WebJS evaluateJs 拼接调用
 - **性质**：预留槽位，初始可为空脚本或占位脚本，后期替换为具体行为逻辑
 
-### 8.2 take 槽位
+### 9.2 take 槽位
 
 - **触发时机**：用户拍照或从相册导入图片后
 - **脚本位置**：`AgentCards/[number].[agent_app_name]/take.js`
-- **入参**：图片 (URI/路径)
+- **函数入口**：`function take(imageUri)` — imageUri 为图片 URI/路径
+- **执行方式**：读取脚本文件内容 → WebJS evaluateJs 拼接调用
 - **性质**：预留槽位，初始可为空脚本或占位脚本，后期替换为具体行为逻辑
 
-### 8.3 扩展性
+### 9.3 扩展性
 
 后续可新增更多行为槽位，如：
 
-| 槽位名 | 触发时机 | 入参 | 说明 |
-|--------|---------|------|------|
-| `refresh` | 用户下拉刷新/定时刷新 | 无 | 自定义数据更新逻辑 |
-| `longpress` | 用户长按卡片 | [number] | 卡片长按行为 |
-| `swipe` | 用户滑动卡片 | [number], direction | 卡片滑动行为 |
+| 槽位名 | 触发时机 | 函数入口 | 入参 | 说明 |
+|--------|---------|---------|------|------|
+| `refresh.js` | 用户点击刷新按钮 | `function refresh()` | 无 | 自定义刷新后行为 |
+| `longpress.js` | 用户长按卡片 | `function longpress(cardNumber)` | [number] | 卡片长按行为 |
+| `swipe.js` | 用户滑动卡片 | `function swipe(cardNumber, direction)` | number + 方向 | 卡片滑动行为 |
 
 新增槽位只需在 AgentApp 目录下放置对应名称的脚本文件，UI 框架按约定名称查找并执行。
 
-## 9. 视觉规范
+## 10. 视觉规范
 
 | 要素 | 规范 |
 |------|------|
@@ -413,109 +486,7 @@ common/
 | 标题栏文字 | ohos_id_color_text_primary, FontWeight.Bold, 16fp |
 | 内容行文字 | ohos_id_color_text_secondary, FontWeight.Regular, 14fp |
 | 按钮样式 | 系统强调色背景, 白色文字, 圆角按钮 |
-| 列表项样式 | 系统色背景, 左侧可选图标, 右侧箭头指示 |
+| 列表项样式 | 系统色背景, 右侧箭头指示 |
 | Tab 样式 | 遵循 HarmonyOS Tabs 组件标准样式 |
-
-## 10. 待讨论问题（第一轮）
-
-**Q1**: JSON 文件新增/删除时的文件监听方式 — HarmonyOS `fileio` 是否支持 `watchFile`？若不支持，轮询间隔建议多少？
-
-**A1**: 在页面的右上角添加刷新按钮，按一下即可扫描目录下文件刷新。
-
-**Q2**: action/take 脚本的执行方式 — 是通过 HarmonyOS `childProcess` 执行 shell 脚本，还是通过应用内解释器？脚本格式是 shell/js/其他？
-
-**A2**: 鸿蒙系统的hap包运行存在沙箱机制，能直接运行shell吗？应该不行吧。建议通过webjs来进行绕过，然后向用户请求权限，赋予AgentCards目录的完全访问权限。
-
-**Q3**: 图片入参格式 — 传给 take 脚本的图片是文件路径 URI 还是 Base64？考虑鸿蒙沙箱权限，脚本能否直接读取图片文件？
-
-**A3**: 先做成URI，如果实际实现上不可行，我们再考虑用base64编码。
-
-**Q4**: 卡片 JSON 是否需要扩展更多字段（如 icon、status 指示、时间戳、line2）？当前最小集合是否够用？
-
-**A4**: 当前就这些字段，保障这套框架实现后续可以扩展就好。
-
-**Q5**: 主页是否需要下拉刷新或自动刷新机制（AgentApp 目录也可能动态增减）？
-
-**A5**: 同**A1**，在页面的右上角添加刷新按钮，按一下即可扫描目录下文件刷新。
-
-**Q6**: 错误处理 — JSON 解析失败、脚本不存在、脚本执行失败时 UI 如何反馈？
-
-**A6**: 在 console log 中详细呈现。
-
-**Q7**: AgentCards 根目录路径是否可配置，还是硬编码为 `storage/media/100/local/files/Docs/AgentCards`？
-
-**A7**: 硬编码，但是定义一个字符串常量，代码里公用这个常量，避免到处都直接写这个路径。
-
-**Q8**: 展示页 Tab 是否需要支持更多 Tab（如设置/历史记录），还是固定两个 Tab？
-
-**A8**: 固定这两个 Tab。
-
-## 11. 待讨论问题（第二轮）
-
-1. WebJS 引擎执行脚本的具体机制
-
-你提到用 WebJS 绕过沙箱执行 action.js / take.js。HarmonyOS 的 Web 组件确实有 javaScriptProxy 可以将原生方法暴露给 JS，反过来也可以通过 loadUrl 或 evaluateJs 执行脚本。需要确认：
-
-- action.js 的入参 [number] 如何传给 WebJS？是拼接成 action(1) 还是读取脚本文件内容后 evaluateJs(scriptContent + "; action(" + number + ")")？
-- take.js 的入参图片 URI 同理，take("file:///path/to/image.jpg")？
-- 这意味着 action.js / take.js 需要有约定的函数入口名（如 function action(cardNumber) 和 function take(imageUri)），是否确认这个约定？
-
-**A1**: 可以，先按你推荐的约定。
-
-2. 目录访问权限与沙箱
-你提到"向用户请求权限，赋予 AgentCards 目录的完全访问权限"。HarmonyOS 对 storage/media/100/local/files/Docs/ 这种公共目录，通常需要：
-
-- 申请 ohos.permission.READ_WRITE_DOWNLOAD_DIRECTORY 或类似公共目录权限
-- 或使用 picker 模式让用户授权
-
-需要确认是用固定权限声明（用户安装时授权），还是运行时弹窗授权？这影响 action.js 里如果需要写回文件时的权限链路。
-
-**A2**: 先用下固定权限声明，可以通过申请权限。
-
-3. 文件监听改为手动刷新后的设计调整
-
-你选择了手动刷新按钮（不监听不轮询），这简化了很多。但有一个边界场景：用户正在看卡片列表时，Agent 在后台写了新的 JSON，用户不刷新就看不到。这是预期行为吗？如果需要，可以在每次从后台切回前台时自动触发一次刷新（onPageShow 生命周期），成本很低且用户无感知。是否加上？
-
-**A4**: 是预期行为。加上在每次从后台切回前台时自动触发一次刷新。
-
-4. 卡片列表为空时的展示
-
-如果某个 AgentApp 的 list/ 目录下暂时没有 JSON 文件（Agent 还没开始输出），卡片列表页面应该展示什么？空态提示（如"暂无卡片数据"）还是空白？
-
-**A5**: 空态提示（显示"暂无卡片数据"）
-
-5. 卡片排序方向
-
-当前按 number 升序排列。对于"快递提醒"这类场景，新快递通常编号更大，用户可能更希望看到最新的在最上面。是否考虑降序排列，或者让排序方向也成为可配置的槽位？
-
-**A6**: 做成可选的槽位`ascendingOrder`，默认是升序(`true`)，可以改成降序(`false`)。放到config.json里面。
-
-## 12. 待讨论问题（第三轮）
-
-1. config.json 的完整格式定义
-
-目前只定义了 ascendingOrder 一个字段。为了框架完整性，建议一次把 config.json 的字段都定义清楚，后续扩展再加字段就行。当前建议的最小集合：
-{
-  "ascendingOrder": true
-}
-是否就这一个字段先？还是你觉得还有其他需要现在就定义的？
-
-**A1**: 当前就先这个字段。
-
-2. config.json 不存在时的默认行为
-
-如果某个 AgentApp 目录下没有 config.json（比如 Agent 还没写入），UI 应该按默认值处理（ascendingOrder=true）。这意味着框架代码中所有 config 字段都有 fallback 默认值。是否确认这个原则？
-
-**A2**: OK
-
-3. 文档中第5节"数据实时更新机制"需要更新
-
-当前第5节还在写"文件监听为主 + 手动刷新兜底"和 fileio 时序图，但你已经决定改为手动刷新按钮 + 后台切前台自动刷新。这块需要我帮你更新吗？
-
-**A3**: 需要更新。
-
-4. FileSystemWatcher.ets 是否还需要保留
-
-你选择了不做文件监听和轮询，那模块划分中的 FileSystemWatcher.ets 可以去掉或改为 DirectoryScanner.ets（只做扫描不做监听）。实际上已经有 DirectoryScanner.ets，所以 FileSystemWatcher 可以去掉。
-
-**A4**: OK
+| 刷新按钮 | 页面右上角, 使用系统 SymbolGlyph refresh 图标 |
+| 空态提示 | 居中灰色文字, "暂无卡片数据" / "暂无AgentApp" |
