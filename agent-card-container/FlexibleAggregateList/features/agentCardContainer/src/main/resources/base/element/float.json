@@ -1,0 +1,40 @@
+{
+  "float": [
+    {
+      "name": "card_border_radius",
+      "value": "16vp"
+    },
+    {
+      "name": "card_gap",
+      "value": "12vp"
+    },
+    {
+      "name": "title_font_size",
+      "value": "16fp"
+    },
+    {
+      "name": "line_font_size",
+      "value": "14fp"
+    },
+    {
+      "name": "button_font_size",
+      "value": "14fp"
+    },
+    {
+      "name": "button_height",
+      "value": "36vp"
+    },
+    {
+      "name": "button_border_radius",
+      "value": "8vp"
+    },
+    {
+      "name": "list_item_padding",
+      "value": "16vp"
+    },
+    {
+      "name": "list_item_margin_bottom",
+      "value": "8vp"
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "module": {
+    "name": "agentCardContainer",
+    "type": "har",
+    "deviceTypes": [
+      "phone",
+      "tablet"
+    ]
+  }
+}

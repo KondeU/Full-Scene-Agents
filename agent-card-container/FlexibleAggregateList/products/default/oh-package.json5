@@ -8,6 +8,7 @@
   "dependencies": {
     "@ohos/adaptivelayout": "file:../../features/adaptiveLayout",
     "@ohos/responsivelayout": "file:../../features/responsiveLayout",
-    "@ohos/common": "file:../../common"
+    "@ohos/common": "file:../../common",
+    "@ohos/agentcardcontainer": "file:../../features/agentCardContainer"
   }
 }

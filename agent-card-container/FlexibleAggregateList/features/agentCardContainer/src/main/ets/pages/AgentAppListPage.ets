@@ -1,10 +1,10 @@
-import { AgentAppListComponent } from '@ohos/agentcardcontainer';
-import { AgentAppEntry } from '@ohos/agentcardcontainer';
-import { AgentAppListViewModel } from '@ohos/agentcardcontainer';
+import { AgentAppListComponent } from '../view/AgentAppListComponent';
+import { AgentAppEntry } from '../model/AgentAppEntry';
+import { AgentAppListViewModel } from '../viewmodel/AgentAppListViewModel';
 
 @Entry
 @Component
-struct Index {
+struct AgentAppListPage {
   @State agentAppList: AgentAppEntry[] = [];
 
   aboutToAppear(): void {
@@ -39,3 +39,5 @@ struct Index {
     .height('100%')
   }
 }
+
+export { AgentAppListPage };
