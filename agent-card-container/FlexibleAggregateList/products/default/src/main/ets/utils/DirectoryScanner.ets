@@ -1,21 +1,19 @@
 import { fileIo as fs } from '@kit.CoreFileKit';
-import { Logger } from '@ohos/common';
 import { AgentAppEntry } from '../model/AgentAppEntry';
-import { commonConstants } from '../constants/CommonConstants';
 
-const logger = new Logger();
 const TAG = 'DirectoryScanner';
 
 export class DirectoryScanner {
-  static scanAgentAppDirs(): AgentAppEntry[] {
+  static scanAgentAppDirs(rootPath: string): AgentAppEntry[] {
     const entries: AgentAppEntry[] = [];
     try {
-      const rootPath: string = commonConstants.AGENT_CARDS_ROOT;
+      console.info(TAG, `Scanning root: ${rootPath}`);
       if (!fs.accessSync(rootPath)) {
-        logger.info(TAG, `Root directory does not exist: ${rootPath}`);
+        console.info(TAG, `Root directory does not exist: ${rootPath}`);
         return entries;
       }
       const dirList: string[] = fs.listFileSync(rootPath);
+      console.info(TAG, `Found ${dirList.length} entries`);
       for (const dirName of dirList) {
         const match: RegExpMatchArray | null = dirName.match(/^(\d+)\.(.+)$/);
         if (match !== null) {
@@ -27,7 +25,7 @@ export class DirectoryScanner {
       }
       entries.sort((a: AgentAppEntry, b: AgentAppEntry) => a.number - b.number);
     } catch (err) {
-      logger.error(TAG, `Failed to scan AgentApp dirs`);
+      console.error(TAG, `Failed to scan AgentApp dirs: ${JSON.stringify(err)}`);
     }
     return entries;
   }
@@ -35,9 +33,9 @@ export class DirectoryScanner {
   static scanCardJsonFiles(agentAppPath: string): string[] {
     const jsonFiles: string[] = [];
     try {
-      const listPath: string = `${agentAppPath}/${commonConstants.LIST_DIR_NAME}`;
+      const listPath: string = `${agentAppPath}/list`;
       if (!fs.accessSync(listPath)) {
-        logger.info(TAG, `List directory does not exist: ${listPath}`);
+        console.info(TAG, `List directory does not exist: ${listPath}`);
         return jsonFiles;
       }
       const fileList: string[] = fs.listFileSync(listPath);
@@ -47,7 +45,7 @@ export class DirectoryScanner {
         }
       }
     } catch (err) {
-      logger.error(TAG, `Failed to scan card JSON files`);
+      console.error(TAG, `Failed to scan card JSON files: ${JSON.stringify(err)}`);
     }
     return jsonFiles;
   }

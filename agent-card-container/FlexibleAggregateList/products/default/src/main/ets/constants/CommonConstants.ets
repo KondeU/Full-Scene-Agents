@@ -28,8 +28,6 @@ interface CommonConstantsInterface {
   adaptiveColumnHeight: string;
   adaptiveFlexibleColumnWidth: string;
   adaptiveFlexShrink: number;
-  AGENT_CARDS_ROOT: string;
-  LIST_DIR_NAME: string;
   CONFIG_FILE_NAME: string;
   CARD_BORDER_RADIUS: number;
   CARD_GAP: number;
@@ -189,8 +187,6 @@ export const commonConstants: CommonConstantsInterface = {
    */
   adaptiveFlexShrink: 1,
 
-  AGENT_CARDS_ROOT: 'storage/media/100/local/files/Docs/Download/AgentCards',
-  LIST_DIR_NAME: 'list',
   CONFIG_FILE_NAME: 'config.json',
   CARD_BORDER_RADIUS: 16,
   CARD_GAP: 12,
