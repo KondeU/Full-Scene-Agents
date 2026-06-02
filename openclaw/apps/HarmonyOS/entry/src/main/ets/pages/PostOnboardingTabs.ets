@@ -75,7 +75,7 @@ export struct PostOnboardingTabs {
 
   @Builder StatusBar() {
     Row() {
-      Text('OpenClaw')
+      Text('HealthAgent')
         .fontSize(20)
         .fontWeight(FontWeight.Bold)
         .fontColor('#17181C');

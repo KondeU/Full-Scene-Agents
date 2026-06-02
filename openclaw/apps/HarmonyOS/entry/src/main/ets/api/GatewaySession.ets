@@ -51,7 +51,7 @@ export class InvokeResult {
 }
 
 export class GatewayClientInfo {
-  id: string = 'openclaw-harmonyos';
+  id: string = 'healthagent-harmonyos';
   displayName: string = '';
   version: string = '2026.3.2';
   platform: string = 'harmonyos';
@@ -68,7 +68,7 @@ export class GatewayConnectOptions {
   commands: string[] = [];
   permissions: Record<string, boolean> = {};
   client: GatewayClientInfo = new GatewayClientInfo();
-  userAgent: string = 'OpenClawHarmony/2026.3.2 (HarmonyOS)';
+  userAgent: string = 'HealthAgentHarmony/2026.3.2 (HarmonyOS)';
 }
 
 class SelectedConnectAuth {
@@ -485,18 +485,18 @@ export class GatewaySession {
   private extractServerName(response: GatewayResponse): string {
     const payloadValue = response.payload;
     if (!payloadValue) {
-      return 'OpenClaw';
+      return 'HealthAgent';
     }
 
     const payload = payloadValue as Record<string, Object | string>;
     const serverValue = payload['server'];
     if (!serverValue || typeof serverValue === 'string') {
-      return 'OpenClaw';
+      return 'HealthAgent';
     }
 
     const server = serverValue as Record<string, Object | string>;
     const host = server['host'];
-    return typeof host === 'string' && host.trim().length > 0 ? host : 'OpenClaw';
+    return typeof host === 'string' && host.trim().length > 0 ? host : 'HealthAgent';
   }
 
   private readObject(value: Object | string | undefined): Record<string, Object | string> {

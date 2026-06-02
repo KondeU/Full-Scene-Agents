@@ -2,15 +2,15 @@
   "string": [
     {
       "name": "module_desc",
-      "value": "OpenClaw 移动入口模块"
+      "value": "HealthAgent 移动入口模块"
     },
     {
       "name": "EntryAbility_desc",
-      "value": "OpenClaw 移动应用程序"
+      "value": "HealthAgent 移动应用程序"
     },
     {
       "name": "EntryAbility_label",
-      "value": "OpenClaw"
+      "value": "HealthAgent"
     },
     {
       "name": "internet_permission_reason",
@@ -106,7 +106,7 @@
     },
     {
       "name": "chat_empty_description",
-      "value": "发送一条消息，开始与 OpenClaw 对话。"
+      "value": "发送一条消息，开始与 HealthAgent 对话。"
     },
     {
       "name": "chat_tools_running",
@@ -742,7 +742,7 @@
     },
     {
       "name": "settings_product_name",
-      "value": "OpenClaw HarmonyOS 移动版"
+      "value": "HealthAgent HarmonyOS 移动版"
     },
     {
       "name": "settings_connection",
@@ -810,7 +810,7 @@
     },
     {
       "name": "onboarding_title",
-      "value": "OpenClaw\n移动端设置"
+      "value": "HealthAgent\n移动端设置"
     },
     {
       "name": "onboarding_step_counter",
@@ -878,7 +878,7 @@
     },
     {
       "name": "onboarding_setup_code_placeholder",
-      "value": "粘贴 openclaw qr --setup-code-only 生成的设置码"
+      "value": "粘贴 healthagent qr --setup-code-only 生成的设置码"
     },
     {
       "name": "onboarding_quickfill_emulator",
@@ -1111,6 +1111,14 @@
     {
       "name": "onboarding_error_connection_failed_check_settings",
       "value": "连接失败，请检查设置后重试。"
+    },
+    {
+      "name": "widget_display_name",
+      "value": "HealthAgent 卡片"
+    },
+    {
+      "name": "widget_description",
+      "value": "本周健康周报和拍照录入入口"
     }
   ]
 }

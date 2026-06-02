@@ -1,0 +1,33 @@
+{
+  "forms": [
+    {
+      "name": "HealthAgentWidget",
+      "displayName": "$string:widget_display_name",
+      "description": "$string:widget_description",
+      "src": "./ets/widget/pages/HealthAgentWidget.ets",
+      "uiSyntax": "arkts",
+      "window": {
+        "autoDesignWidth": true,
+        "designWidth": 720
+      },
+      "colorMode": "auto",
+      "isDefault": true,
+      "updateEnabled": true,
+      "scheduledUpdateTime": "10:30",
+      "updateDuration": 1,
+      "defaultDimension": "2*4",
+      "supportDimensions": [
+        "2*2",
+        "2*4",
+        "4*4"
+      ],
+      "formConfigAbility": "ability://com.example.myapplication.FormConfigAbility",
+      "metadata": [
+        {
+          "name": "ohos.extension.form",
+          "resource": "$profile:form_config"
+        }
+      ]
+    }
+  ]
+}

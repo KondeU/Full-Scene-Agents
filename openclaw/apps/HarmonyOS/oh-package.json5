@@ -1,6 +1,6 @@
 {
   "modelVersion": "6.0.2",
-  "description": "OpenClaw HarmonyOS App",
+  "description": "HealthAgent HarmonyOS App",
   "dependencies": {
     "@luvi/lv-markdown-in": "^3.2.9"
   },

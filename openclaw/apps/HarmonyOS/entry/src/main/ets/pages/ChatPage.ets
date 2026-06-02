@@ -261,7 +261,7 @@ export struct ChatPage {
       this.MessageAvatar(false);
 
       Column({ space: 4 }) {
-        Text('OpenClaw')
+        Text('HealthAgent')
           .fontSize(11)
           .fontWeight(FontWeight.Medium)
           .fontColor('#8A92A2');

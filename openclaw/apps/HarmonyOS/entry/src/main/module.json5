@@ -33,6 +33,21 @@
         ]
       }
     ],
+    "extensionAbilities": [
+      {
+        "name": "HealthAgentFormAbility",
+        "srcEntry": "./ets/widget/GenUIFormAbility.ets",
+        "type": "form",
+        "label": "$string:widget_display_name",
+        "description": "$string:widget_description",
+        "metadata": [
+          {
+            "name": "ohos.extension.form",
+            "resource": "$profile:form_config"
+          }
+        ]
+      }
+    ],
     "requestPermissions": [
       {
         "name": "ohos.permission.INTERNET",

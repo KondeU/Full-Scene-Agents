@@ -2,15 +2,15 @@
   "string": [
     {
       "name": "module_desc",
-      "value": "OpenClaw Mobile Entry Module"
+      "value": "HealthAgent Mobile Entry Module"
     },
     {
       "name": "EntryAbility_desc",
-      "value": "OpenClaw Mobile Application"
+      "value": "HealthAgent Mobile Application"
     },
     {
       "name": "EntryAbility_label",
-      "value": "OpenClaw"
+      "value": "HealthAgent"
     },
     {
       "name": "internet_permission_reason",
@@ -106,7 +106,7 @@
     },
     {
       "name": "chat_empty_description",
-      "value": "Send a message to begin chatting with OpenClaw."
+      "value": "Send a message to begin chatting with HealthAgent."
     },
     {
       "name": "chat_tools_running",
@@ -742,7 +742,7 @@
     },
     {
       "name": "settings_product_name",
-      "value": "OpenClaw Mobile for HarmonyOS"
+      "value": "HealthAgent Mobile for HarmonyOS"
     },
     {
       "name": "settings_connection",
@@ -810,7 +810,7 @@
     },
     {
       "name": "onboarding_title",
-      "value": "OpenClaw\nMobile Setup"
+      "value": "HealthAgent\nMobile Setup"
     },
     {
       "name": "onboarding_step_counter",
@@ -878,7 +878,7 @@
     },
     {
       "name": "onboarding_setup_code_placeholder",
-      "value": "Paste code from openclaw qr --setup-code-only"
+      "value": "Paste code from healthagent qr --setup-code-only"
     },
     {
       "name": "onboarding_quickfill_emulator",
@@ -1111,6 +1111,14 @@
     {
       "name": "onboarding_error_connection_failed_check_settings",
       "value": "Connection failed. Check your settings and try again."
+    },
+    {
+      "name": "widget_display_name",
+      "value": "HealthAgent Widget"
+    },
+    {
+      "name": "widget_description",
+      "value": "Weekly health summary and data capture"
     }
   ]
 }

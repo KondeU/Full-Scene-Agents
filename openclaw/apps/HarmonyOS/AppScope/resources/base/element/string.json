@@ -2,11 +2,11 @@
   "string": [
     {
       "name": "app_name",
-      "value": "OpenClaw"
+      "value": "HealthAgent"
     },
     {
       "name": "app_description",
-      "value": "OpenClaw Mobile - HarmonyOS Client"
+      "value": "HealthAgent - HarmonyOS Client"
     }
   ]
 }
