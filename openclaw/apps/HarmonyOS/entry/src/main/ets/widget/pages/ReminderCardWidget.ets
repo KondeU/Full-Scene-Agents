@@ -5,8 +5,8 @@ struct ReminderCardWidget {
   @State body: string = '当前无主动提醒';
   @State note: string = '';
   @State imageUrl: string = '';
-  @State hasImage: string = 'false';
-  @State hasNote: string = 'false';
+  @State hasImage: boolean = false;
+  @State hasNote: boolean = false;
 
   build() {
     Row() {
@@ -24,10 +24,10 @@ struct ReminderCardWidget {
           .fontSize(12)
           .fontWeight(FontWeight.Medium)
           .fontColor('#4D5563')
-          .maxLines(this.hasImage === 'true' ? 3 : 5)
+          .maxLines(this.hasImage ? 3 : 5)
           .textOverflow({ overflow: TextOverflow.Ellipsis });
 
-        if (this.hasNote === 'true') {
+        if (this.hasNote) {
           Text(this.note)
             .fontSize(10)
             .fontWeight(FontWeight.Normal)
@@ -36,13 +36,13 @@ struct ReminderCardWidget {
             .textOverflow({ overflow: TextOverflow.Ellipsis });
         }
       }
-      .layoutWeight(this.hasImage === 'true' ? 1 : 0)
-      .width(this.hasImage === 'true' ? '60%' : '100%')
+      .layoutWeight(this.hasImage ? 1 : 0)
+      .width(this.hasImage ? '60%' : '100%')
       .justifyContent(FlexAlign.Start)
       .alignItems(HorizontalAlign.Start)
       .padding({ left: 12, right: 4, top: 10, bottom: 10 });
 
-      if (this.hasImage === 'true') {
+      if (this.hasImage) {
         Image(this.imageUrl)
           .width('38%')
           .height('100%')
@@ -54,16 +54,7 @@ struct ReminderCardWidget {
     }
     .width('100%')
     .height('100%')
-    .backgroundColor('#FFFFFF')
+    .backgroundColor('#F0F4FA')
     .borderRadius(16)
-    .onClick(() => {
-      postCardAction(this, {
-        action: 'router',
-        abilityName: 'EntryAbility',
-        params: {
-          targetPage: 'debug'
-        }
-      });
-    });
   }
 }

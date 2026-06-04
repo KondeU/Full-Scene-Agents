@@ -1,7 +1,6 @@
 export enum OpenClawCapability {
   Canvas = 'canvas',
   Camera = 'camera',
-  Card = 'card',
   Sms = 'sms',
   VoiceWake = 'voiceWake',
   Location = 'location',
@@ -81,8 +80,4 @@ export enum OpenClawMotionCommand {
 
 export enum OpenClawCallLogCommand {
   Search = 'callLog.search'
-}
-
-export enum OpenClawCardCommand {
-  ReminderUpdate = 'card.reminder.update'
 }

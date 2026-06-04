@@ -4,22 +4,15 @@
       "name": "ReminderCard",
       "displayName": "$string:reminder_form_display_name",
       "description": "$string:reminder_form_desc",
-      "src": "./ets/form/pages/ReminderCardWidget.ets",
+      "src": "./ets/widget/pages/ReminderCardWidget.ets",
       "uiSyntax": "arkts",
-      "window": {
-        "designWidth": 720,
-        "autoDesignWidth": true
-      },
-      "colorMode": "auto",
       "isDefault": true,
-      "updateEnabled": true,
-      "updateDuration": 1,
+      "isDynamic": false,
+      "updateEnabled": false,
       "defaultDimension": "2*2",
       "supportDimensions": [
-        "2*2",
-        "2*4"
-      ],
-      "formConfigAbility": "ability://EntryAbility"
+        "2*2"
+      ]
     }
   ]
 }
