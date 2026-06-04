@@ -49,7 +49,7 @@
 
 ```typescript
 import { cameraPicker } from '@kit.CameraKit';
-import { photoAccessHelper } from '@kit.PhotoAccessKit';
+import { photoAccessHelper } from '@kit.MediaLibraryKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 
 export class PhotoResult {
@@ -64,26 +64,26 @@ export class PhotoCaptureService {
    */
   async pickFromAlbum(): Promise<PhotoResult | null> {
     try {
-      const picker = new photoAccessHelper.PhotoViewPicker();
-      const options = new photoAccessHelper.PhotoSelectOptions();
+      let picker: photoAccessHelper.PhotoViewPicker = new photoAccessHelper.PhotoViewPicker();
+      let options: photoAccessHelper.PhotoSelectOptions = new photoAccessHelper.PhotoSelectOptions();
       options.MIMEType = photoAccessHelper.PhotoViewMIMETypes.IMAGE_TYPE;
       options.maxSelectNumber = 1;
 
-      const result = await picker.select(options);
+      let result: photoAccessHelper.PhotoSelectResult = await picker.select(options);
       // 用户取消：result 存在但 photoUris 为空
       if (!result || !result.photoUris || result.photoUris.length === 0) {
         console.info('PhotoCaptureService: album pick cancelled or returned no URI');
         return null;
       }
 
-      const uri = result.photoUris[0];
-      const photoResult = new PhotoResult();
+      let uri: string = result.photoUris[0];
+      let photoResult: PhotoResult = new PhotoResult();
       photoResult.uri = uri;
       photoResult.displayName = this.extractDisplayName(uri);
       console.info('PhotoCaptureService: album pick success, uri=' + uri);
       return photoResult;
     } catch (error) {
-      const bizErr = error as BusinessError;
+      let bizErr: BusinessError = error as BusinessError;
       console.error('PhotoCaptureService: pickFromAlbum error, code=' + bizErr.code + ', msg=' + bizErr.message);
       return null;
     }
@@ -98,33 +98,34 @@ export class PhotoCaptureService {
     try {
       // cameraPicker.pick() 需要 UIAbility 上下文，通过 AppStorage 获取
       // （EntryAbility 已在启动时将 abilityContext 存入 AppStorage）
-      const ctx = AppStorage.get<Context>('abilityContext');
+      let ctx: Context | undefined = AppStorage.get<Context>('abilityContext');
       if (!ctx) {
         console.error('PhotoCaptureService: abilityContext not found in AppStorage');
         return null;
       }
 
       // cameraPicker.pick() 打开系统相机 UI，拍照后自动存入相册
-      const result = await cameraPicker.pick(
+      let pickerProfile: cameraPicker.PickerProfile = new cameraPicker.PickerProfile();
+      let result: cameraPicker.PickerResult = await cameraPicker.pick(
         ctx,
-        [cameraPicker.PickerMediaType.IMAGE],
-        { maxPhotoCount: 1 }
+        [cameraPicker.PickerMediaType.PHOTO],
+        pickerProfile
       );
 
-      // 用户取消或拍照失败
-      if (!result || !result.photoUris || result.photoUris.length === 0) {
+      // 用户取消或拍照失败：resultUri 为空
+      if (!result || !result.resultUri || result.resultUri.length === 0) {
         console.info('PhotoCaptureService: camera capture cancelled or returned no URI');
         return null;
       }
 
-      const uri = result.photoUris[0];
-      const photoResult = new PhotoResult();
+      let uri: string = result.resultUri;
+      let photoResult: PhotoResult = new PhotoResult();
       photoResult.uri = uri;
       photoResult.displayName = this.extractDisplayName(uri);
       console.info('PhotoCaptureService: camera capture success, uri=' + uri);
       return photoResult;
     } catch (error) {
-      const bizErr = error as BusinessError;
+      let bizErr: BusinessError = error as BusinessError;
       console.error('PhotoCaptureService: capturePhoto error, code=' + bizErr.code + ', msg=' + bizErr.message);
       return null;
     }
@@ -147,7 +148,7 @@ export class PhotoCaptureService {
     if (!uri || uri.length === 0) {
       return '';
     }
-    const lastSlash = uri.lastIndexOf('/');
+    let lastSlash: number = uri.lastIndexOf('/');
     if (lastSlash >= 0 && lastSlash < uri.length - 1) {
       return uri.substring(lastSlash + 1);
     }
@@ -160,10 +161,14 @@ export const photoCaptureService = new PhotoCaptureService();
 
 **关键说明**：
 
-1. **`pickFromAlbum()`** -- 使用 `photoAccessHelper.PhotoViewPicker`，这是 HarmonyOS NEXT 的安全控件模式 Picker，**不需要声明 `ohos.permission.READ_IMAGEVIDEO` 权限**。Picker 自己管理权限弹窗，用户在 Picker 内授权即可。用户取消选取时 `photoUris` 为空数组，方法返回 `null`。
+1. **`pickFromAlbum()`** -- 使用 `photoAccessHelper.PhotoViewPicker`（来自 `@kit.MediaLibraryKit`），这是 HarmonyOS NEXT 的安全控件模式 Picker，**不需要声明 `ohos.permission.READ_IMAGEVIDEO` 权限**。Picker 自己管理权限弹窗，用户在 Picker 内授权即可。用户取消选取时 `photoUris` 为空数组，方法返回 `null`。
 
-2. **`capturePhoto()`** -- 使用 `cameraPicker.pick()`（`@kit.CameraKit`），这是 HarmonyOS NEXT 的相机安全控件模式，打开系统相机 UI 拍照后自动存入系统相册，返回的 `photoUris` 即为存入相册后的 URI。**不需要单独声明相机权限**（安全控件模式下 Picker 自管理）。但如果实际设备测试发现需要额外权限，则在 `module.json5` 中补充。
-   - **注意区分**：网上许多旧教程使用的 `camera.CameraViewPicker` / `CameraViewPickerOptions` / `CameraViewMIMETypes` 是已废弃的非公开 API，在 HarmonyOS NEXT (API 6.0+) 中不存在，应使用 `cameraPicker.pick()` 替代。
+2. **`capturePhoto()`** -- 使用 `cameraPicker.pick()`（`@kit.CameraKit`），这是 HarmonyOS NEXT 的相机安全控件模式，打开系统相机 UI 拍照后自动存入系统相册，返回的 `result.resultUri` 即为存入相册后的 URI（单个字符串，非数组）。**不需要单独声明相机权限**（安全控件模式下 Picker 自管理）。但如果实际设备测试发现需要额外权限，则在 `module.json5` 中补充。
+   - **注意区分**：网上许多旧教程使用的 `camera.CameraViewPicker` / `CameraViewPickerOptions` / `CameraViewMIMETypes` / `maxPhotoCount` / `photoUris` 是已废弃的非公开 API，在 HarmonyOS NEXT (API 6.0+) 中不存在。正确用法：
+     - 导入：`import { cameraPicker } from '@kit.CameraKit'`
+     - 枚举：`cameraPicker.PickerMediaType.PHOTO`（非 `IMAGE`）
+     - 结果：`result.resultUri`（单个字符串，非 `photoUris` 数组）
+     - 配置：`new cameraPicker.PickerProfile()`（无 `maxPhotoCount` 属性）
    - `cameraPicker.pick()` 需要 `Context` 作为第一个参数。当前通过 `AppStorage.get<Context>('abilityContext')` 获取 —— EntryAbility 已在应用启动时将 UIAbility 上下文存入 AppStorage（与项目中 `MainViewModel.getLocalizedString()` 使用相同模式）。如果后续 `obtainPhotoToProcess` 中需要读取照片文件数据，也可以复用此上下文获取方式。
 
 3. **`obtainPhotoToProcess()`** -- 当前仅 console.log 输出。**后续对接要点**：其他同学只需修改此函数的实现，将 `photoResult.uri`（或从 uri 读取的图像数据）传入他们的处理逻辑。函数签名 `obtainPhotoToProcess(photoResult: PhotoResult)` 保持不变即可。如果对接逻辑需要异步 I/O，可将返回类型改为 `Promise<void>`。

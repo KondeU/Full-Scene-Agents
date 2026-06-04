@@ -393,6 +393,94 @@
       "value": "设置"
     },
     {
+      "name": "tab_import",
+      "value": "导入"
+    },
+    {
+      "name": "import_header_eyebrow",
+      "value": "导入"
+    },
+    {
+      "name": "import_header_title",
+      "value": "导入"
+    },
+    {
+      "name": "import_header_subtitle",
+      "value": "拍照或从相册选取照片导入"
+    },
+    {
+      "name": "import_action_camera",
+      "value": "拍照"
+    },
+    {
+      "name": "import_action_album",
+      "value": "相册"
+    },
+    {
+      "name": "import_state_label",
+      "value": "导入状态"
+    },
+    {
+      "name": "import_state_idle",
+      "value": "就绪"
+    },
+    {
+      "name": "import_state_capturing",
+      "value": "拍照中"
+    },
+    {
+      "name": "import_state_picking",
+      "value": "选取中"
+    },
+    {
+      "name": "import_state_success",
+      "value": "照片已获取"
+    },
+    {
+      "name": "import_state_error",
+      "value": "错误"
+    },
+    {
+      "name": "import_reason_idle",
+      "value": "点击拍照拍摄新照片，或点击相册选取已有照片。"
+    },
+    {
+      "name": "import_reason_capturing",
+      "value": "相机已打开。拍一张照片后会自动存入相册。"
+    },
+    {
+      "name": "import_reason_picking",
+      "value": "相册选取器已打开。选择一张照片进行导入。"
+    },
+    {
+      "name": "import_reason_success",
+      "value": "照片已获取并传入 obtainPhotoToProcess 进行后续处理。"
+    },
+    {
+      "name": "import_reason_error",
+      "value": "上一次照片操作失败。请重试或使用其他来源。"
+    },
+    {
+      "name": "import_error_title",
+      "value": "导入错误"
+    },
+    {
+      "name": "import_error_camera",
+      "value": "拍照失败。"
+    },
+    {
+      "name": "import_error_album",
+      "value": "相册选取失败。"
+    },
+    {
+      "name": "import_photo_label",
+      "value": "已选照片"
+    },
+    {
+      "name": "import_photo_uri",
+      "value": "照片 URI"
+    },
+    {
       "name": "voice_header_eyebrow",
       "value": "语音"
     },

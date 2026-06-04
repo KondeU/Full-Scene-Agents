@@ -4,6 +4,7 @@ import { ChatPage } from './ChatPage';
 import { VoicePage } from './VoicePage';
 import { ScreenPage } from './ScreenPage';
 import { SettingsPage } from './SettingsPage';
+import { ImportPage } from './ImportPage';
 
 /**
  * Main tabs page shown after onboarding.
@@ -56,8 +57,10 @@ export struct PostOnboardingTabs {
           VoicePage({ viewModel: this.viewModel });
         } else if (this.activeTab === 3) {
           ScreenPage({ viewModel: this.viewModel });
-        } else {
+        } else if (this.activeTab === 4) {
           SettingsPage({ viewModel: this.viewModel });
+        } else if (this.activeTab === 5) {
+          ImportPage({ viewModel: this.viewModel });
         }
       }
       .width('100%')
@@ -110,6 +113,7 @@ export struct PostOnboardingTabs {
       this.TabItem(2, this.localizedText('tab_voice', 'Voice'), '🎙️');
       this.TabItem(3, this.localizedText('tab_screen', 'Screen'), '🖥️');
       this.TabItem(4, this.localizedText('tab_settings', 'Settings'), '⚙️');
+      this.TabItem(5, this.localizedText('tab_import', 'Import'), '📥');
     }
     .width('100%')
     .padding({ left: 10, right: 10, top: 10, bottom: 10 })

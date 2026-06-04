@@ -393,6 +393,94 @@
       "value": "Settings"
     },
     {
+      "name": "tab_import",
+      "value": "Import"
+    },
+    {
+      "name": "import_header_eyebrow",
+      "value": "IMPORT"
+    },
+    {
+      "name": "import_header_title",
+      "value": "Import"
+    },
+    {
+      "name": "import_header_subtitle",
+      "value": "Take a photo or pick from album to import into OpenClaw."
+    },
+    {
+      "name": "import_action_camera",
+      "value": "Camera"
+    },
+    {
+      "name": "import_action_album",
+      "value": "Album"
+    },
+    {
+      "name": "import_state_label",
+      "value": "IMPORT STATE"
+    },
+    {
+      "name": "import_state_idle",
+      "value": "Ready"
+    },
+    {
+      "name": "import_state_capturing",
+      "value": "Capturing"
+    },
+    {
+      "name": "import_state_picking",
+      "value": "Picking"
+    },
+    {
+      "name": "import_state_success",
+      "value": "Photo obtained"
+    },
+    {
+      "name": "import_state_error",
+      "value": "Error"
+    },
+    {
+      "name": "import_reason_idle",
+      "value": "Tap Camera to take a new photo, or Album to pick an existing one."
+    },
+    {
+      "name": "import_reason_capturing",
+      "value": "Camera is open. Take a photo and it will be saved to the album automatically."
+    },
+    {
+      "name": "import_reason_picking",
+      "value": "Album picker is open. Select one photo to import."
+    },
+    {
+      "name": "import_reason_success",
+      "value": "A photo has been obtained and passed to obtainPhotoToProcess for further handling."
+    },
+    {
+      "name": "import_reason_error",
+      "value": "The last photo operation failed. Try again or use a different source."
+    },
+    {
+      "name": "import_error_title",
+      "value": "IMPORT ERROR"
+    },
+    {
+      "name": "import_error_camera",
+      "value": "Camera capture failed."
+    },
+    {
+      "name": "import_error_album",
+      "value": "Album pick failed."
+    },
+    {
+      "name": "import_photo_label",
+      "value": "SELECTED PHOTO"
+    },
+    {
+      "name": "import_photo_uri",
+      "value": "Photo URI"
+    },
+    {
       "name": "voice_header_eyebrow",
       "value": "VOICE"
     },
