@@ -77,13 +77,14 @@ export struct ImportPage {
           Text(this.localizedText('import_action_camera', 'Camera'))
             .fontSize(14)
             .fontWeight(FontWeight.Bold)
-            .fontColor('#FFFFFF');
+            .fontColor('#1D5DD8');
         }
       }
       .layoutWeight(1)
       .height(120)
-      .backgroundColor('#1D5DD8')
+      .backgroundColor('#ECF3FF')
       .borderRadius(16)
+      .border({ width: 1, color: '#D5E2FA' })
       .enabled(this.processingState === 'idle')
       .onClick(() => {
         this.handleCapturePhoto();
