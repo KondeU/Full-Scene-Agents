@@ -62,7 +62,6 @@ HarmonyOS 的 **Form Kit**（也叫"卡片"或"服务卡片"）是系统级的�
 | **修改** | `InvokeCommandRegistry.ets` | 新增 `card.reminder.update` command spec | +3 行 |
 | **修改** | `OpenClawProtocolConstants.ets` | 新增 `OpenClawCardCommand` enum | +5 行 |
 | **修改** | `NodeInvokeDispatcher.ets` | 新增 card command 处理分支 | +5 行 |
-| **修改** | `MainViewModel.ets` | 在 node invoke handler 中接入 CardReminderService | +2 行 |
 | **修改** | `EntryAbility.ets` | onFormEvent 处理卡片路由事件 | +5 行 |
 | **修改** | 3 × `string.json` | 新增国际化 key（卡片+调试） | ~25 条/文件 |
 
@@ -139,7 +138,6 @@ Form Kit 的卡片运行在独立进程（FormExtension），与主应用进程�
 
 ```typescript
 import { formProvider, formBindingData } from '@kit.FormKit';
-import { formInfo } from '@kit.AbilityKit';
 import { InvokeRequest, InvokeResult } from '../api/GatewaySession';
 
 export class ReminderCardContent {
@@ -182,6 +180,23 @@ export class CardReminderService {
     if (index >= 0) {
       this.formIds.splice(index, 1);
       console.info('CardReminderService: removed formId=' + trimmed);
+    }
+  }
+
+  /**
+   * 向单个 formId 推送当前内容。用于 onAddForm 时立即填充新卡片。
+   */
+  pushCurrentToForm(formId: string): void {
+    if (!formId || formId.trim().length === 0) {
+      return;
+    }
+    try {
+      const bindingData = this.buildFormBindingData();
+      formProvider.updateForm(formId, bindingData);
+      console.info('CardReminderService: pushed current content to formId=' + formId);
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      console.warn('CardReminderService: pushCurrentToForm failed for formId=' + formId + ', error=' + errorMsg);
     }
   }
 
@@ -297,6 +312,8 @@ export default class ReminderFormExtension extends FormExtension {
     const formId = want.parameters?.['ohos.extra.param.key.form_identity'] as string || '';
     console.info('ReminderFormExtension: onAddForm, formId=' + formId);
     cardReminderService.addFormId(formId);
+    // 立即推送当前内容到新添加的卡片，确保新卡片不是空白状态
+    cardReminderService.pushCurrentToForm(formId);
     return formId;
   }
 
@@ -321,10 +338,11 @@ export default class ReminderFormExtension extends FormExtension {
 
 **关键说明**：
 
-1. **onAddForm**：用户从桌面添加卡片时触发。系统分配 formId 通过 `want.parameters['ohos.extra.param.key.form_identity']` 传递。收集后存入 `cardReminderService`，后续推送时就知道该推给谁。
+1. **onAddForm**：用户从桌面添加卡片时触发。系统分配 formId 通过 `want.parameters['ohos.extra.param.key.form_identity']` 传递。收集后存入 `cardReminderService`，然后立即调用 `pushCurrentToForm(formId)` 将当前内容推送到新卡片，确保新卡片不会显示空白/过期内容。
 2. **onRemoveForm**：用户从桌面移除卡片时触发。清理 formId，避免后续 `updateForm()` 调用失败。
 3. **onUpdateForm**：系统定时刷新触发（配置中 `updateDuration` > 0 时）。当前不做额外操作，因为主动推送覆盖了所有数据更新场景。
 4. **onFormEvent**：卡片 UI 中 `postCardAction` 发出的消息事件。当前仅打日志，后续可扩展为跳转到主应用特定页面。
+5. **跨进程访问说明**：HarmonyOS FormExtension 默认运行在宿主应用进程内，ETS 模块缓存是进程级共享的。因此 `ReminderFormExtension` 中导入 `cardReminderService` 单例能正确访问主应用创建的同个实例。这是 HarmonyOS Form Kit 的默认行为，不需要额外配置。
 
 ---
 
@@ -442,6 +460,7 @@ struct ReminderCardWidget {
 
 ```typescript
 import { MainViewModel } from '../viewmodel/MainViewModel';
+import { InvokeRequest } from '../api/GatewaySession';
 import { ReminderCardContent, cardReminderService } from '../service/CardReminderService';
 
 @Component
@@ -923,7 +942,7 @@ export struct DebugPage {
 ```diff
         } else if (this.activeTab === 5) {
           ImportPage({ viewModel: this.viewModel });
-+       } else {
++       } else if (this.activeTab === 6) {
 +         DebugPage({ viewModel: this.viewModel });
         }
 ```
@@ -935,7 +954,7 @@ export struct DebugPage {
 +     this.TabItem(6, this.localizedText('tab_debug', 'Debug'), '🔧');
 ```
 
-**说明**：与 Import Tab 的添加模式完全一致。Import 是 index=5 的显式 `else if`，Debug 是最后的兜底 `else`（index=6）。
+**说明**：与 Import Tab 的添加模式完全一致。Debug = index=6，使用显式 `else if (this.activeTab === 6)` 精确匹配。不使用 `else` 兜底，避免 `activeTab` 意外越界时静默渲染错误页面。
 
 ### 6.4 `OpenClawProtocolConstants.ets` — 新增 Card Command enum
 
@@ -1130,7 +1149,7 @@ export struct DebugPage {
 | 单例服务 | `securePrefs` / `mainViewModel` / `photoCaptureService` | ✅ `cardReminderService` 单例导出 |
 | Invoke 路由 | `InvokeCommandRegistry.spec` → `NodeInvokeDispatcher.switch` → handler | ✅ `card.reminder.update` 同模式 |
 | 能力广播 | `advertisedCapabilities` + `advertisedCommands` | ✅ 新增 `Card` capability 和 command |
-| 条件渲染 Tab | `if (activeTab === N)` + `else` 兜底 | ✅ Debug = index=6 兜底 |
+| 条件渲染 Tab | `if (activeTab === N)` 显式精确匹配 | ✅ Debug = index=6，显式 `else if` |
 | 国际化 | `localizedText(name, fallback)` + `@StorageProp localeVersion` | ✅ |
 | Form Kit 模式 | FormExtension + formProvider + ArkTS 卡片 | ✅ 遵循官方规范 |
 | 卡片尺寸 | 2×2/2×4 标准尺寸 | ✅ |
@@ -1267,7 +1286,7 @@ entry/src/main/ets/
 │   └── pages/
 │       └── ReminderCardWidget.ets    # ★ 新增
 ├── viewmodel/
-│   └── MainViewModel.ets             # ★ +2行（invoke handler 接入）
+│   └── MainViewModel.ets             # 不改动（invoke 路由在 NodeInvokeDispatcher 内部闭环）
 ├── model/
 │   └── GatewayModels.ets             # 不改动
 ├── api/
