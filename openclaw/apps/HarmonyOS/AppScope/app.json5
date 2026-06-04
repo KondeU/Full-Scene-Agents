@@ -1,6 +1,6 @@
 {
   "app": {
-    "bundleName": "ai.openclaw.har",
+    "bundleName": "ai.openclaw.harmonyos",
     "vendor": "openclaw",
     "versionCode": 202603010,
     "versionName": "1.0.0",

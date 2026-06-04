@@ -25,11 +25,12 @@ export struct DebugPage {
       Column({ space: 14 }) {
         this.Header();
         this.PushFormSection();
-        this.InvokeSimulateSection();
 
         if (this.pushResult.length > 0) {
           this.PushResultRail();
         }
+
+        this.InvokeSimulateSection();
       }
       .width('100%')
       .padding({ left: 20, right: 20, top: 16, bottom: 24 });
@@ -105,12 +106,13 @@ export struct DebugPage {
   }
 
   @Builder PushResultRail() {
-    Column({ space: 2 }) {
+    Column({ space: 4 }) {
       Text(this.localizedText('debug_result_label', 'PUSH RESULT'))
         .fontSize(11).fontWeight(FontWeight.Medium).fontColor('#C8841A');
-      Text(this.pushResult).fontSize(14).fontWeight(FontWeight.Medium).fontColor('#17181C');
+      Text(this.pushResult).fontSize(13).fontWeight(FontWeight.Medium).fontColor('#17181C')
+        .maxLines(10).textOverflow({ overflow: TextOverflow.Ellipsis }).wordBreak(WordBreak.BREAK_ALL);
     }
-    .width('100%').padding({ left: 10, right: 10, top: 8, bottom: 8 })
+    .width('100%').padding(12)
     .backgroundColor('#FFFFFF').borderRadius(12).border({ width: 1, color: '#C8841A' });
   }
 
@@ -125,7 +127,8 @@ export struct DebugPage {
     content.note = this.debugNote.trim();
     content.imageUrl = this.debugImageUrl.trim();
     cardReminderService.updateReminderCard(content);
-    this.pushResult = 'Pushed: title="' + content.title + '", body="' + content.body + '"';
+    this.pushResult = 'Pushed: title="' + content.title + '", body="' + content.body +
+      '", note="' + content.note + '", imageUrl="' + content.imageUrl + '"';
   }
 
   private handleResetDefault(): void {

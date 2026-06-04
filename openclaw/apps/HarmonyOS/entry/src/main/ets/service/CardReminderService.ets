@@ -57,7 +57,8 @@ export class CardReminderService {
   updateReminderCard(content: ReminderCardContent): void {
     this.currentContent = content;
     console.info('CardReminderService: update, title=' + content.title + ', body=' + content.body +
-      ', note=' + content.note + ', formIdsCount=' + this.formIds.length);
+      ', note=' + content.note + ', imageUrl=' + content.imageUrl +
+      ', hasImage=' + (content.imageUrl.length > 0) + ', formIdsCount=' + this.formIds.length);
     if (this.formIds.length === 0) {
       this.refreshFormIds().then(() => {
         if (this.formIds.length > 0) this.pushToAllForms();
