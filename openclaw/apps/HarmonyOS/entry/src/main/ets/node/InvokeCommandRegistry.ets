@@ -1,7 +1,9 @@
 import { OpenClawCapability, OpenClawDeviceCommand } from '../protocol/OpenClawProtocolConstants';
+import { OpenClawCardCommand } from '../protocol/OpenClawProtocolConstants';
 
 export class HarmonyNodeRuntimeFlags {
   deviceInfoAvailable: boolean = true;
+  cardReminderAvailable: boolean = true;
 }
 
 export class InvokeCommandSpec {
@@ -19,6 +21,7 @@ export class InvokeCommandRegistry {
     new InvokeCommandSpec(OpenClawDeviceCommand.Status),
     new InvokeCommandSpec(OpenClawDeviceCommand.Info),
     new InvokeCommandSpec(OpenClawDeviceCommand.Permissions),
+    new InvokeCommandSpec(OpenClawCardCommand.ReminderUpdate),
     new InvokeCommandSpec(OpenClawDeviceCommand.Health)
   ];
 
@@ -33,6 +36,9 @@ export class InvokeCommandRegistry {
     if (flags.deviceInfoAvailable) {
       caps.push(OpenClawCapability.Device);
     }
+    if (flags.cardReminderAvailable) {
+      caps.push(OpenClawCapability.Card);
+    }
     return caps;
   }
 
@@ -43,6 +49,9 @@ export class InvokeCommandRegistry {
       commands.push(OpenClawDeviceCommand.Info);
       commands.push(OpenClawDeviceCommand.Permissions);
       commands.push(OpenClawDeviceCommand.Health);
+    }
+    if (flags.cardReminderAvailable) {
+      commands.push(OpenClawCardCommand.ReminderUpdate);
     }
     return commands;
   }

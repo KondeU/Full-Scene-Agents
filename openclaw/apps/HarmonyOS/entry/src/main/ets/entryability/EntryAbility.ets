@@ -82,6 +82,10 @@ export default class EntryAbility extends UIAbility {
     mainViewModel.refreshLocalizedUiState();
   }
 
+  onFormEvent(formId: string, message: string): void {
+    hilog.info(DOMAIN, TAG, 'onFormEvent, formId=' + formId + ', message=' + message);
+  }
+
   /**
    * Called when the ability moves to background
    */

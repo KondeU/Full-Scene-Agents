@@ -33,6 +33,23 @@
         ]
       }
     ],
+    "extensionAbilities": [
+      {
+        "name": "ReminderFormExtension",
+        "srcEntry": "./ets/form/ReminderFormExtension.ets",
+        "description": "$string:reminder_form_desc",
+        "icon": "$media:icon",
+        "label": "$string:reminder_form_label",
+        "type": "form",
+        "exported": true,
+        "metadata": [
+          {
+            "name": "ohos.extension.form",
+            "resource": "$profile:form_config"
+          }
+        ]
+      }
+    ],
     "requestPermissions": [
       {
         "name": "ohos.permission.INTERNET",

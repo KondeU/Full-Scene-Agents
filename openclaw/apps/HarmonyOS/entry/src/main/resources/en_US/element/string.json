@@ -481,6 +481,102 @@
       "value": "Photo URI"
     },
     {
+      "name": "tab_debug",
+      "value": "Debug"
+    },
+    {
+      "name": "debug_header_eyebrow",
+      "value": "DEBUG"
+    },
+    {
+      "name": "debug_header_title",
+      "value": "Debug"
+    },
+    {
+      "name": "debug_header_subtitle",
+      "value": "Test card content, simulate invoke commands, and inspect device state."
+    },
+    {
+      "name": "debug_card_preview_label",
+      "value": "CARD PREVIEW"
+    },
+    {
+      "name": "debug_push_label",
+      "value": "PUSH CARD CONTENT"
+    },
+    {
+      "name": "debug_push_title_placeholder",
+      "value": "Title (optional)"
+    },
+    {
+      "name": "debug_push_body_placeholder",
+      "value": "Body (required)"
+    },
+    {
+      "name": "debug_push_note_placeholder",
+      "value": "Note (optional)"
+    },
+    {
+      "name": "debug_push_image_placeholder",
+      "value": "Image URL (optional)"
+    },
+    {
+      "name": "debug_push_button",
+      "value": "Push to Card"
+    },
+    {
+      "name": "debug_reset_button",
+      "value": "Reset Default"
+    },
+    {
+      "name": "debug_invoke_label",
+      "value": "INVOKE SIMULATION"
+    },
+    {
+      "name": "debug_invoke_desc",
+      "value": "Simulates a gateway invoke command (card.reminder.update) using the current form fields above."
+    },
+    {
+      "name": "debug_invoke_button",
+      "value": "Simulate Invoke"
+    },
+    {
+      "name": "debug_state_label",
+      "value": "CARD STATE"
+    },
+    {
+      "name": "debug_state_title",
+      "value": "Title"
+    },
+    {
+      "name": "debug_state_body",
+      "value": "Body"
+    },
+    {
+      "name": "debug_state_note",
+      "value": "Note"
+    },
+    {
+      "name": "debug_state_image",
+      "value": "Image URL"
+    },
+    {
+      "name": "debug_result_label",
+      "value": "PUSH RESULT"
+    },
+    {
+      "name": "reminder_form_desc",
+      "value": "Reminder card for OpenClaw"
+    },
+    {
+      "name": "reminder_form_label",
+      "value": "OpenClaw Reminder"
+    },
+    {
+      "name": "reminder_form_display_name",
+      "value": "Reminder"
+    },
+    {
       "name": "voice_header_eyebrow",
       "value": "VOICE"
     },

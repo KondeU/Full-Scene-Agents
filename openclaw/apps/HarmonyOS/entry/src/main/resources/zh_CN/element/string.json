@@ -481,6 +481,102 @@
       "value": "照片 URI"
     },
     {
+      "name": "tab_debug",
+      "value": "调试"
+    },
+    {
+      "name": "debug_header_eyebrow",
+      "value": "调试"
+    },
+    {
+      "name": "debug_header_title",
+      "value": "调试"
+    },
+    {
+      "name": "debug_header_subtitle",
+      "value": "测试卡片内容推送、模拟 invoke 命令、查看设备状态。"
+    },
+    {
+      "name": "debug_card_preview_label",
+      "value": "卡片预览"
+    },
+    {
+      "name": "debug_push_label",
+      "value": "推送卡片内容"
+    },
+    {
+      "name": "debug_push_title_placeholder",
+      "value": "标题（可选）"
+    },
+    {
+      "name": "debug_push_body_placeholder",
+      "value": "正文（必填）"
+    },
+    {
+      "name": "debug_push_note_placeholder",
+      "value": "备注（可选）"
+    },
+    {
+      "name": "debug_push_image_placeholder",
+      "value": "图片 URL（可选）"
+    },
+    {
+      "name": "debug_push_button",
+      "value": "推送到卡片"
+    },
+    {
+      "name": "debug_reset_button",
+      "value": "恢复默认"
+    },
+    {
+      "name": "debug_invoke_label",
+      "value": "INVOKE 模拟"
+    },
+    {
+      "name": "debug_invoke_desc",
+      "value": "使用上方表单字段模拟网关 invoke 命令（card.reminder.update）。"
+    },
+    {
+      "name": "debug_invoke_button",
+      "value": "模拟 Invoke"
+    },
+    {
+      "name": "debug_state_label",
+      "value": "卡片状态"
+    },
+    {
+      "name": "debug_state_title",
+      "value": "标题"
+    },
+    {
+      "name": "debug_state_body",
+      "value": "正文"
+    },
+    {
+      "name": "debug_state_note",
+      "value": "备注"
+    },
+    {
+      "name": "debug_state_image",
+      "value": "图片 URL"
+    },
+    {
+      "name": "debug_result_label",
+      "value": "推送结果"
+    },
+    {
+      "name": "reminder_form_desc",
+      "value": "OpenClaw 提醒卡片"
+    },
+    {
+      "name": "reminder_form_label",
+      "value": "OpenClaw 提醒"
+    },
+    {
+      "name": "reminder_form_display_name",
+      "value": "提醒"
+    },
+    {
       "name": "voice_header_eyebrow",
       "value": "语音"
     },
