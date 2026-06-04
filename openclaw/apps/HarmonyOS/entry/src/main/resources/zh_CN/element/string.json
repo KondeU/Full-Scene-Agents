@@ -566,11 +566,11 @@
     },
     {
       "name": "reminder_form_desc",
-      "value": "OpenClaw 提醒卡片"
+      "value": "主动提醒卡片"
     },
     {
       "name": "reminder_form_label",
-      "value": "OpenClaw 提醒"
+      "value": "主动提醒"
     },
     {
       "name": "reminder_form_display_name",

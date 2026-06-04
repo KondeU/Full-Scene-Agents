@@ -909,7 +909,7 @@ export struct DebugPage {
       "colorMode": "auto",
       "isDefault": true,
       "updateDuration": 1,
-      "defaultDimension": "2*2",
+      "defaultDimension": "2*4",
       "supportDimensions": [
         "2*2",
         "2*4"
@@ -924,8 +924,8 @@ export struct DebugPage {
 
 1. **uiSyntax: "arkts"** — 使用 ArkTS 声明式卡片，而非 JS 卡片。
 2. **updateDuration: 1** — 定时刷新周期为 1 个单位（约 1 小时），作为兜底刷新。主动推送不受此限制。
-3. **defaultDimension: "2*2"** — 默认添加尺寸为 2×2。
-4. **supportDimensions** — 支持 2×2 和 2×4，用户可以在添加时选择尺寸。
+3. **defaultDimension: "2*4"** — 默认添加尺寸为 2*4。
+4. **supportDimensions** — 支持 2×2 和 2×4，用户可以在添加时选择尺寸，2*2时不显示图片。
 5. **src** — 卡片 UI 文件路径。
 
 ### 6.3 `PostOnboardingTabs.ets` — 3处增量修改
