@@ -48,8 +48,9 @@
 **完整代码设计**：
 
 ```typescript
-import { camera } from '@kit.CameraKit';
+import { cameraPicker } from '@kit.CameraKit';
 import { photoAccessHelper } from '@kit.PhotoAccessKit';
+import { BusinessError } from '@kit.BasicServicesKit';
 
 export class PhotoResult {
   uri: string = '';
@@ -57,6 +58,10 @@ export class PhotoResult {
 }
 
 export class PhotoCaptureService {
+  /**
+   * 从相册选取照片，使用 PhotoViewPicker 安全控件模式。
+   * 用户取消选取时返回 null（不抛异常）。
+   */
   async pickFromAlbum(): Promise<PhotoResult | null> {
     try {
       const picker = new photoAccessHelper.PhotoViewPicker();
@@ -65,8 +70,9 @@ export class PhotoCaptureService {
       options.maxSelectNumber = 1;
 
       const result = await picker.select(options);
+      // 用户取消：result 存在但 photoUris 为空
       if (!result || !result.photoUris || result.photoUris.length === 0) {
-        console.info('PhotoCaptureService: album pick returned no URI');
+        console.info('PhotoCaptureService: album pick cancelled or returned no URI');
         return null;
       }
 
@@ -77,21 +83,37 @@ export class PhotoCaptureService {
       console.info('PhotoCaptureService: album pick success, uri=' + uri);
       return photoResult;
     } catch (error) {
-      console.error('PhotoCaptureService: pickFromAlbum error:', error);
+      const bizErr = error as BusinessError;
+      console.error('PhotoCaptureService: pickFromAlbum error, code=' + bizErr.code + ', msg=' + bizErr.message);
       return null;
     }
   }
 
+  /**
+   * 使用相机拍照，使用 cameraPicker 安全控件模式。
+   * 拍照后自动存入系统相册，返回存入后的 URI。
+   * 用户取消拍照时返回 null（不抛异常）。
+   */
   async capturePhoto(): Promise<PhotoResult | null> {
     try {
-      const picker = new camera.CameraViewPicker();
-      const options = new camera.CameraViewPickerOptions();
-      options.MIMEType = camera.CameraViewMIMETypes.IMAGE_TYPE;
-      options.maxSelectNumber = 1;
+      // cameraPicker.pick() 需要 UIAbility 上下文，通过 AppStorage 获取
+      // （EntryAbility 已在启动时将 abilityContext 存入 AppStorage）
+      const ctx = AppStorage.get<Context>('abilityContext');
+      if (!ctx) {
+        console.error('PhotoCaptureService: abilityContext not found in AppStorage');
+        return null;
+      }
 
-      const result = await picker.select(options);
+      // cameraPicker.pick() 打开系统相机 UI，拍照后自动存入相册
+      const result = await cameraPicker.pick(
+        ctx,
+        [cameraPicker.PickerMediaType.IMAGE],
+        { maxPhotoCount: 1 }
+      );
+
+      // 用户取消或拍照失败
       if (!result || !result.photoUris || result.photoUris.length === 0) {
-        console.info('PhotoCaptureService: camera capture returned no URI');
+        console.info('PhotoCaptureService: camera capture cancelled or returned no URI');
         return null;
       }
 
@@ -102,11 +124,18 @@ export class PhotoCaptureService {
       console.info('PhotoCaptureService: camera capture success, uri=' + uri);
       return photoResult;
     } catch (error) {
-      console.error('PhotoCaptureService: capturePhoto error:', error);
+      const bizErr = error as BusinessError;
+      console.error('PhotoCaptureService: capturePhoto error, code=' + bizErr.code + ', msg=' + bizErr.message);
       return null;
     }
   }
 
+  /**
+   * 照片后处理入口。当前 stub 实现，仅 console.log。
+   * 后续由其他同学对接实际处理逻辑。
+   *
+   * @param photoResult 拍摄或选取得到的照片信息（uri + displayName）
+   */
   obtainPhotoToProcess(photoResult: PhotoResult): void {
     console.info(
       'PhotoCaptureService: obtainPhotoToProcess called, uri=' + photoResult.uri +
@@ -131,11 +160,13 @@ export const photoCaptureService = new PhotoCaptureService();
 
 **关键说明**：
 
-1. **`pickFromAlbum()`** -- 使用 `photoAccessHelper.PhotoViewPicker`，这是 HarmonyOS 6 (API 12+) 的安全控件模式 Picker，**不需要声明 `ohos.permission.READ_IMAGEVIDEO` 权限**。Picker 自己管理权限弹窗，用户在 Picker 内授权即可。
+1. **`pickFromAlbum()`** -- 使用 `photoAccessHelper.PhotoViewPicker`，这是 HarmonyOS NEXT 的安全控件模式 Picker，**不需要声明 `ohos.permission.READ_IMAGEVIDEO` 权限**。Picker 自己管理权限弹窗，用户在 Picker 内授权即可。用户取消选取时 `photoUris` 为空数组，方法返回 `null`。
 
-2. **`capturePhoto()`** -- 使用 `camera.CameraViewPicker`，这也是安全控件模式，拍照后自动存入系统相册，返回的 `photoUris` 即为存入相册后的 URI，**不需要单独声明相机权限**（安全控件模式下 Picker 自管理）。但如果实际设备测试发现需要额外权限，则在 `module.json5` 中补充。
+2. **`capturePhoto()`** -- 使用 `cameraPicker.pick()`（`@kit.CameraKit`），这是 HarmonyOS NEXT 的相机安全控件模式，打开系统相机 UI 拍照后自动存入系统相册，返回的 `photoUris` 即为存入相册后的 URI。**不需要单独声明相机权限**（安全控件模式下 Picker 自管理）。但如果实际设备测试发现需要额外权限，则在 `module.json5` 中补充。
+   - **注意区分**：网上许多旧教程使用的 `camera.CameraViewPicker` / `CameraViewPickerOptions` / `CameraViewMIMETypes` 是已废弃的非公开 API，在 HarmonyOS NEXT (API 6.0+) 中不存在，应使用 `cameraPicker.pick()` 替代。
+   - `cameraPicker.pick()` 需要 `Context` 作为第一个参数。当前通过 `AppStorage.get<Context>('abilityContext')` 获取 —— EntryAbility 已在应用启动时将 UIAbility 上下文存入 AppStorage（与项目中 `MainViewModel.getLocalizedString()` 使用相同模式）。如果后续 `obtainPhotoToProcess` 中需要读取照片文件数据，也可以复用此上下文获取方式。
 
-3. **`obtainPhotoToProcess()`** -- 当前仅 console.log 输出。**后续对接要点**：其他同学只需修改此函数的实现，将 `photoResult.uri`（或从 uri 读取的图像数据）传入他们的处理逻辑。函数签名 `obtainPhotoToProcess(photoResult: PhotoResult)` 保持不变即可。
+3. **`obtainPhotoToProcess()`** -- 当前仅 console.log 输出。**后续对接要点**：其他同学只需修改此函数的实现，将 `photoResult.uri`（或从 uri 读取的图像数据）传入他们的处理逻辑。函数签名 `obtainPhotoToProcess(photoResult: PhotoResult)` 保持不变即可。如果对接逻辑需要异步 I/O，可将返回类型改为 `Promise<void>`。
 
 4. **单例导出** -- `export const photoCaptureService = new PhotoCaptureService()`，与项目中 `securePrefs` 的单例导出模式一致。
 
@@ -161,6 +192,26 @@ export struct ImportPage {
   @State processingState: string = 'idle';
   @State photoUriState: string = '';
   @State errorState: string = '';
+
+  /**
+   * 每次进入 Tab 时重置为就绪状态，确保不会残留上一次操作的旧照片/错误信息。
+   * 这与 VoicePage/ScreenPage 的"每次切回时刷新状态"模式一致。
+   */
+  aboutToAppear(): void {
+    this.resetPageState();
+  }
+
+  aboutToDisappear(): void {
+    // ImportPage 不注册任何监听器，无需清理。
+    // 保留此方法占位以符合页面生命周期约定，便于后续扩展。
+    // 如果后续 obtainPhotoToProcess 引入异步流，在此取消。
+  }
+
+  private resetPageState(): void {
+    this.processingState = 'idle';
+    this.photoUriState = '';
+    this.errorState = '';
+  }
 
   build() {
     Scroll() {
@@ -504,9 +555,9 @@ export struct ImportPage {
 
 2. **本地状态 `processingState`** -- 使用状态码 `idle/capturing/picking/success/error`，与 VoicePage/ScreenPage 的状态码模式完全一致，复用相同的颜色映射体系。
 
-3. **不注册监听器** -- ImportPage 的 `aboutToAppear/aboutToDisappear` 不需要注册监听器，因为照片获取是用户主动触发的一次性操作，不是持续监听的状态。这与 VoicePage/ScreenPage 的轻量级模式类似（它们也没有独立监听器）。
+3. **不注册监听器，但有 `aboutToAppear/aboutToDisappear`** -- ImportPage 不需要持续监听 ViewModel 状态变化（照片获取是用户主动触发的操作）。但每次 Tab 切回时通过 `aboutToAppear` 重置页面状态为 `idle`，避免残留上一次的照片预览和错误信息。这与现有架构的"每次进入自刷新"模式一致，确保页面状态可预测。
 
-4. **`handleCapturePhoto/handlePickFromAlbum`** -- 异步操作，操作期间按钮 disabled（`this.processingState === 'idle'` 时才 enabled），防止重复触发。
+4. **`handleCapturePhoto/handlePickFromAlbum`** -- 异步操作，操作期间按钮 disabled（`this.processingState !== 'idle'` 时才 enabled），防止重复触发。
 
 5. **照片预览** -- 成功获取照片后，`photoUriState` 非空，显示 `Image(this.photoUriState)` 预览和 URI 信息。
 
@@ -528,7 +579,7 @@ export struct ImportPage {
 + import { ImportPage } from './ImportPage';
 ```
 
-**修改 2：条件渲染区 -- 将最后的 `else` 改为 `else if (activeTab === 4)` + 新增 `else` 分支**
+**修改 2：条件渲染区 -- 将最后的 `else` 改为 `else if (activeTab === 4)` + 新增 `else if (activeTab === 5)`**
 
 ```diff
         } else if (this.activeTab === 3) {
@@ -536,10 +587,15 @@ export struct ImportPage {
 -       } else {
 +       } else if (this.activeTab === 4) {
           SettingsPage({ viewModel: this.viewModel });
-+       } else {
++       } else if (this.activeTab === 5) {
 +         ImportPage({ viewModel: this.viewModel });
         }
 ```
+
+> **设计决策**：使用显式 `else if (this.activeTab === 5)` 而非 `else` 兜底。原因：
+> - 如果 `activeTab` 因为任何意外被设为 >5 的值，使用 `else` 会静默渲染 ImportPage，掩盖 bug
+> - 使用显式匹配 + 无匹配时不渲染任何内容，更容易在调试时发现问题
+> - 未来新增更多 Tab 时，每个 Tab 都有明确的索引约束
 
 **修改 3：TabBar Builder 中新增 TabItem**
 
@@ -548,7 +604,7 @@ export struct ImportPage {
 +     this.TabItem(5, this.localizedText('tab_import', 'Import'), '📥');
 ```
 
-**为什么不调整现有 Tab 索引？** -- 当前条件渲染用的是硬编码数字（0/1/2/3），Settings 是 `else`兜底=4。新增 Import 只需把兜底改成显式 `else if (activeTab === 4)` 然后新兜底 `else` 指向 ImportPage（index=5）。所有现有逻辑不受影响。
+**为什么不调整现有 Tab 索引？** -- 当前条件渲染用的是硬编码数字（0/1/2/3），Settings 是 `else`兜底=4。新增 Import 只需把兜底改成显式 `else if (activeTab === 4)`，然后新增 `else if (activeTab === 5)` 指向 ImportPage。所有现有逻辑不受影响。
 
 **syncTabSideEffects 不需要新增逻辑** -- ImportPage 不需要首次激活时的初始化动作（与 VoicePage/ScreenPage 不同），所以 `syncTabSideEffects()` 无需修改。
 
@@ -558,7 +614,7 @@ export struct ImportPage {
 
 当前 `requestPermissions` 只有 INTERNET 和 GET_NETWORK_INFO。
 
-HarmonyOS 6 (API 12+) 的 `PhotoViewPicker` 和 `CameraViewPicker` 在安全控件模式下**自动管理权限**，但为了兼容性和某些设备可能需要显式声明的情况，建议添加相机权限：
+HarmonyOS NEXT 的 `PhotoViewPicker` 和 `cameraPicker` 在安全控件模式下**自动管理权限**，但为了兼容性和某些设备可能需要显式声明的情况，建议添加相机权限：
 
 ```diff
       {
@@ -661,9 +717,9 @@ HarmonyOS 6 (API 12+) 的 `PhotoViewPicker` 和 `CameraViewPicker` 在安全控�
 | 状态码体系 | stateCode + label + description + textColor + bgColor + borderColor | 是 |
 | 颜色映射 | 绿/蓝/黄/红/灰 5 色系 | 是（capturing/picking=蓝, success=绿, error=红, idle=灰） |
 | 国际化 | localizedText(name, fallback) + @StorageProp localeVersion | 是 |
-| 监听器 | 可选（VoicePage/ScreenPage 无独立监听器） | 无独立监听器（与 ScreenPage 同模式） |
+| 监听器 | 可选（VoicePage/ScreenPage 无独立监听器） | 无独立监听器（与 ScreenPage 同模式），但有 `aboutToAppear` 重置状态 |
+| 生命周期 | 所有 Page 都有 `aboutToAppear` | 是（每次切回重置为 idle 状态） |
 | 服务层 | GatewaySession(api层) + SecurePrefs(common层) | PhotoCaptureService(service层) -- 新增目录，与 api 同级 |
-
 ---
 
 ## 六、后续对接指南
@@ -752,7 +808,43 @@ entry/src/main/ets/
 
 ---
 
-## 八、实施顺序
+## 八、UX 风险与布局考量
+
+### 8.1 TabBar 拥挤问题
+
+现有 5 个 Tab 在小屏设备（360dp 宽度）上，每个 Tab 约 72dp。增加第 6 个 Tab 后每个仅剩约 60dp，标签文字可能出现截断。
+
+| 设备宽度 | 5 Tab (当前) | 6 Tab (新增后) |
+|----------|-------------|----------------|
+| 360dp (小屏手机) | ~72dp/Tab | ~60dp/Tab |
+| 390dp (标准手机) | ~78dp/Tab | ~65dp/Tab |
+| 600dp+ (平板) | ~120dp/Tab | ~100dp/Tab |
+
+**缓解措施**：
+- **Tab 标签使用短文字**：中文"导入"仅 2 字，英文"Import"仅 6 字符，均在可接受范围内
+- **字体大小为 11px**：与现有 Tab 保持一致，在 60dp 宽度下仍可容纳约 5 个中文字符
+- **后续如继续新增 Tab，建议方案**：
+  - 改为横向可滚动的 TabBar（`Scroll` + `Row`）
+  - 或采用"更多"折叠菜单（将低频 Tab 收入溢出菜单）
+
+### 8.2 平板/大屏适配
+
+当前设计未对平板做特殊适配。`ActionButtons` 中两个按钮使用 `layoutWeight(1)` 各占 50%，在平板上会拉伸到很宽。建议后续迭代增加 `maxWidth` 约束：
+
+```typescript
+// 建议后续增加
+Row({ space: 12 }) {
+  // 两个按钮...
+}
+.width('100%')
+.constraintSize({ maxWidth: 480 });  // 限制最大宽度，平板下居中显示
+```
+
+此项不作为当前开发阻塞项，可在后续 UI 优化中处理。
+
+---
+
+## 九、实施顺序
 
 1. 创建 `entry/src/main/ets/service/PhotoCaptureService.ets`
 2. 创建 `entry/src/main/ets/pages/ImportPage.ets`
