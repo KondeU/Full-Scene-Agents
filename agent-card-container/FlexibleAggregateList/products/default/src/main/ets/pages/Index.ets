@@ -1,11 +1,12 @@
 import { AgentAppEntry } from '../model/AgentAppEntry';
 import { AgentAppListViewModel } from '../viewmodel/AgentAppListViewModel';
 import { common } from '@kit.AbilityKit';
-import { picker, fileIo as fs } from '@kit.CoreFileKit';
+import { picker, fileIo as fs, fileShare } from '@kit.CoreFileKit';
 import { preferences } from '@kit.ArkData';
+import { BusinessError } from '@kit.BasicServicesKit';
 
 const PREF_NAME = 'agent_cards_config';
-const PREF_KEY_ROOT = 'root_path';
+const PREF_KEY_ROOT = 'root_uri';
 
 @Entry
 @Component
@@ -13,14 +14,14 @@ struct Index {
   @State agentAppList: AgentAppEntry[] = [];
   @State needsPickDir: boolean = false;
   private viewModel: AgentAppListViewModel = new AgentAppListViewModel();
-  private rootPath: string = '';
+  private rootDirUri: string = '';
 
   aboutToAppear(): void {
     this.initRootPath();
   }
 
   onPageShow(): void {
-    if (this.rootPath.length > 0) {
+    if (this.rootDirUri.length > 0) {
       this.refreshList();
     }
   }
@@ -29,11 +30,9 @@ struct Index {
     try {
       const context: common.UIAbilityContext = this.getUIContext().getHostContext() as common.UIAbilityContext;
       preferences.getPreferences(context, PREF_NAME).then((prefs: preferences.Preferences) => {
-        const saved: preferences.ValueType = prefs.getSync(PREF_KEY_ROOT, '');
-        if (typeof saved === 'string' && saved.length > 0 && fs.accessSync(saved)) {
-          this.rootPath = saved;
-          console.info('Index', `Loaded saved root: ${this.rootPath}`);
-          this.refreshList();
+        const savedUri: preferences.ValueType = prefs.getSync(PREF_KEY_ROOT, '');
+        if (typeof savedUri === 'string' && savedUri.length > 0) {
+          this.activateAndUse(savedUri, prefs);
           return;
         }
         this.needsPickDir = true;
@@ -45,67 +44,138 @@ struct Index {
     }
   }
 
-  private openFilePicker(): void {
+  private activateAndUse(uri: string, prefs: preferences.Preferences): void {
+    const policyInfo: fileShare.PolicyInfo = {
+      uri: uri,
+      operationMode: fileShare.OperationMode.READ_MODE,
+    };
+    fileShare.checkPersistentPermission([policyInfo]).then((results: Array<boolean>) => {
+      if (results.length > 0 && results[0]) {
+        // Has persisted permission, activate it
+        fileShare.activatePermission([policyInfo]).then(() => {
+          console.info('Index', 'Activated persisted URI');
+          this.rootDirUri = uri;
+          this.refreshList();
+        }).catch((err: BusinessError) => {
+          console.error('Index', `Activate failed: ${err.message}`);
+          this.needsPickDir = true;
+        });
+      } else {
+        // No persisted permission, need to pick again
+        console.info('Index', 'No persistent permission, need re-pick');
+        this.needsPickDir = true;
+      }
+    }).catch(() => {
+      this.needsPickDir = true;
+    });
+  }
+
+  private openFolderPicker(): void {
     try {
-      const documentSelectOptions: picker.DocumentSelectOptions = new picker.DocumentSelectOptions();
-      documentSelectOptions.maxSelectNumber = 1;
-      const documentViewPicker: picker.DocumentViewPicker = new picker.DocumentViewPicker();
-      documentViewPicker.select(documentSelectOptions).then((uris: string[]) => {
+      const saveOptions: picker.DocumentSaveOptions = new picker.DocumentSaveOptions();
+      saveOptions.newFileNames = ['_picker_placeholder_'];
+      const documentPicker: picker.DocumentViewPicker = new picker.DocumentViewPicker();
+      documentPicker.save(saveOptions).then((uris: string[]) => {
         if (uris.length > 0) {
-          this.onDirPicked(uris[0]);
+          this.onFolderPicked(uris[0]);
         }
-      }).catch((err: Error) => {
-        console.error('Index', `Picker cancelled or failed: ${err.message}`);
+      }).catch((err: BusinessError) => {
+        console.error('Index', `Picker cancelled: ${err.message}`);
       });
     } catch (e) {
       console.error('Index', `Failed to open picker: ${JSON.stringify(e)}`);
     }
   }
 
-  private onDirPicked(uri: string): void {
+  private onFolderPicked(saveUri: string): void {
     try {
-      // Derive root path from the picked file URI
-      // URI format: file://docs/storage/Users/currentUser/Download/AgentCards/...
-      // First try: walk up from the file path to find AgentCards dir
-      let filePath: string = uri;
-      if (uri.startsWith('file://')) {
-        filePath = decodeURIComponent(uri.substring('file://docs'.length));
-      }
+      console.info('Index', `Save URI: ${saveUri}`);
 
-      // Find the AgentCards segment and use everything before it as root
-      const agentCardsIdx: number = filePath.indexOf('/AgentCards/');
-      if (agentCardsIdx >= 0) {
-        this.rootPath = filePath.substring(0, agentCardsIdx + '/AgentCards'.length);
-      } else {
-        // Fallback: use parent of the picked file's parent (the app dir)
-        const lastSlash: number = filePath.lastIndexOf('/');
-        const secondLastSlash: number = filePath.lastIndexOf('/', lastSlash - 1);
-        this.rootPath = filePath.substring(0, secondLastSlash);
-      }
-      // Normalize path
-      if (!this.rootPath.startsWith('/')) {
-        this.rootPath = '/' + this.rootPath;
-      }
+      // save() returns: file://docs/.../AgentCards/_picker_placeholder_
+      // Strip the placeholder filename to get the directory URI
+      const lastSlash: number = saveUri.lastIndexOf('/');
+      this.rootDirUri = saveUri.substring(0, lastSlash);
+      console.info('Index', `Derived folder URI: ${this.rootDirUri}`);
 
-      console.info('Index', `Picked root: ${this.rootPath}`);
+      // Persist the directory URI permission
+      const policyInfo: fileShare.PolicyInfo = {
+        uri: this.rootDirUri,
+        operationMode: fileShare.OperationMode.READ_MODE,
+      };
+      fileShare.persistPermission([policyInfo]).then(() => {
+        console.info('Index', 'Persisted folder URI');
+      }).catch((err: BusinessError) => {
+        console.info('Index', `Persist failed: ${err.message}`);
+      });
 
-      // Save to preferences
+      // Save URI to preferences
       const context: common.UIAbilityContext = this.getUIContext().getHostContext() as common.UIAbilityContext;
       preferences.getPreferences(context, PREF_NAME).then((prefs: preferences.Preferences) => {
-        prefs.putSync(PREF_KEY_ROOT, this.rootPath);
+        prefs.putSync(PREF_KEY_ROOT, this.rootDirUri);
         prefs.flush();
       });
+
+      // Diagnostic: verify folder access
+      this.runDiagnostics();
 
       this.needsPickDir = false;
       this.refreshList();
     } catch (e) {
-      console.error('Index', `Failed to process picked dir: ${JSON.stringify(e)}`);
+      console.error('Index', `Failed to process picked folder: ${JSON.stringify(e)}`);
     }
+  }
+
+  private runDiagnostics(): void {
+    console.info('DIAG', `=== Folder Access Diagnostic ===`);
+    console.info('DIAG', `rootDirUri: ${this.rootDirUri}`);
+    try {
+      // 1) accessSync on the folder URI itself
+      const ok: boolean = fs.accessSync(this.rootDirUri);
+      console.info('DIAG', `accessSync(rootDirUri) = ${ok}`);
+    } catch (e) {
+      console.error('DIAG', `accessSync(rootDirUri) failed: ${JSON.stringify(e)}`);
+    }
+    try {
+      // 2) list file names directly under AgentCards
+      const list: string[] = fs.listFileSync(this.rootDirUri);
+      console.info('DIAG', `listFileSync(rootDirUri) => ${list.length} items`);
+      list.forEach((name: string, i: number) => {
+        console.info('DIAG', `  [${i}] ${name}`);
+      });
+    } catch (e) {
+      console.error('DIAG', `listFileSync(rootDirUri) failed: ${JSON.stringify(e)}`);
+    }
+    // 3) try to list sub-directories and their list/ contents
+    try {
+      const topList: string[] = fs.listFileSync(this.rootDirUri);
+      for (const child of topList) {
+        const childFull: string = `${this.rootDirUri}/${child}`;
+        try {
+          if (fs.accessSync(childFull)) {
+            const inner: string[] = fs.listFileSync(childFull);
+            console.info('DIAG', `  ${child}/ => ${inner.length} items`);
+            // check for list/ subdir
+            const listDir: string = `${childFull}/list`;
+            if (fs.accessSync(listDir)) {
+              const jsonFiles: string[] = fs.listFileSync(listDir);
+              console.info('DIAG', `  ${child}/list/ => ${jsonFiles.length} items`);
+              jsonFiles.forEach((j: string) => console.info('DIAG', `    ${j}`));
+            }
+          }
+        } catch (err) {
+          console.info('DIAG', `  ${child}/ => cannot access: ${JSON.stringify(err)}`);
+        }
+      }
+    } catch (e) {
+      console.error('DIAG', `Recursive scan failed: ${JSON.stringify(e)}`);
+    }
+    console.info('DIAG', `=== Diagnostic End ===`);
   }
 
   private refreshList(): void {
     try {
-      this.agentAppList = this.viewModel.getAgentAppList(this.rootPath);
+      // Use the folder URI directly with fileIo
+      this.agentAppList = this.viewModel.getAgentAppList(this.rootDirUri);
     } catch (err) {
       console.error('Index', `refreshList failed: ${JSON.stringify(err)}`);
     }
@@ -124,7 +194,7 @@ struct Index {
             .fontColor([$r('sys.color.ohos_id_color_text_secondary')])
             .margin({ right: 12 })
             .onClick(() => {
-              this.openFilePicker();
+              this.openFolderPicker();
             })
           SymbolGlyph($r('sys.symbol.arrow_clockwise'))
             .fontSize(24)
@@ -148,7 +218,7 @@ struct Index {
             .fontSize(16)
             .fontColor($r('sys.color.ohos_id_color_text_secondary'))
             .margin({ bottom: 8 })
-          Text('点击下方按钮，导航到Download/AgentCards目录，选择任意文件即可')
+          Text('请导航到Download/AgentCards目录并点击保存')
             .fontSize(12)
             .fontColor($r('sys.color.ohos_id_color_text_tertiary'))
             .margin({ bottom: 24 })
@@ -159,7 +229,7 @@ struct Index {
             .borderRadius(8)
             .height(40)
             .onClick(() => {
-              this.openFilePicker();
+              this.openFolderPicker();
             })
         }
         .width('100%')
