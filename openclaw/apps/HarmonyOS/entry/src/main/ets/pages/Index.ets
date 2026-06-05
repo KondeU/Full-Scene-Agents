@@ -28,7 +28,7 @@ struct Index {
     Column() {
       if (!this.ready) {
         Column({ space: 12 }) {
-          Text('OpenClaw')
+          Text('HealthAgent')
             .fontSize(28)
             .fontWeight(FontWeight.Bold)
             .fontColor('#17181C');

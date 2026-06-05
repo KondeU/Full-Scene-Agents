@@ -5,13 +5,13 @@
         "name": "default",
         "type": "HarmonyOS",
         "material": {
-          "certpath": "C:\\Users\\PushCat\\.ohos\\config\\default_HarmonyOS_t2e6f6hw_QUXmmdzD3Neiu9rHmM_qJsVwGhJraex6Yk=.cer",
+          "certpath": "/Users/season/.ohos/config/default_HarmonyOS_t-OLh-HaN64Pu4mzQ7kJDvtaTghEvr3x0Ii3iIMGskU=.cer",
           "keyAlias": "debugKey",
-          "keyPassword": "0000001A097E778796474376B37C2A55AAB5FB6AFE2D15176D667E6AB9F500F6A818897415D9F6EC4694",
-          "profile": "C:\\Users\\PushCat\\.ohos\\config\\default_HarmonyOS_t2e6f6hw_QUXmmdzD3Neiu9rHmM_qJsVwGhJraex6Yk=.p7b",
+          "keyPassword": "0000001B8D3D317774DD2909468B84FB07ACE787546BF2DBA347DA96ACC0AC1144D892ADD38241DEADC691",
+          "profile": "/Users/season/.ohos/config/default_HarmonyOS_t-OLh-HaN64Pu4mzQ7kJDvtaTghEvr3x0Ii3iIMGskU=.p7b",
           "signAlg": "SHA256withECDSA",
-          "storeFile": "C:\\Users\\PushCat\\.ohos\\config\\default_HarmonyOS_t2e6f6hw_QUXmmdzD3Neiu9rHmM_qJsVwGhJraex6Yk=.p12",
-          "storePassword": "0000001A04104CCE2A47D6BFD32D687B4C86CA6672747134A1D9BEA4518D579A80B62D020CDAC598475F"
+          "storeFile": "/Users/season/.ohos/config/default_HarmonyOS_t-OLh-HaN64Pu4mzQ7kJDvtaTghEvr3x0Ii3iIMGskU=.p12",
+          "storePassword": "0000001B0D7D0CCC4C40EA622B5B3F2BFC65FAC989B2CD98F23D5D067CE1F524298F962B740BECD4A8BE31"
         }
       }
     ],
