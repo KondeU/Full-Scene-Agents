@@ -2,13 +2,13 @@ import preferences from '@ohos.data.preferences';
 import { cryptoFramework } from '@kit.CryptoArchitectureKit';
 import { huks } from '@kit.UniversalKeystoreKit';
 
-const PREFERENCES_NAME = 'healthagent_prefs';
-const SECURE_PREFENCES_NAME = 'healthagent_secure_prefs';
-const SECURE_PREFS_KEY_ALIAS = 'healthagent_secure_prefs_aes_gcm';
-const SECURE_PREFS_AAD = 'healthagent.secure-prefs';
+const PREFERENCES_NAME = 'intentx_prefs';
+const SECURE_PREFENCES_NAME = 'intentx_secure_prefs';
+const SECURE_PREFS_KEY_ALIAS = 'intentx_secure_prefs_aes_gcm';
+const SECURE_PREFS_AAD = 'intentx.secure-prefs';
 const SECURE_PREFS_NONCE_BYTES = 12;
 const SECURE_PREFS_TAG_BYTES = 16;
-const SECURE_PREFS_PREFIX = '__healthagent_huks_v1__:';
+const SECURE_PREFS_PREFIX = '__intentx_huks_v1__:';
 
 class SecureEnvelope {
   nonce: string = '';

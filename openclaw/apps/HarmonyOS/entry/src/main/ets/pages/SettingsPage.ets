@@ -354,7 +354,7 @@ export struct SettingsPage {
       Column({ space: 12 }) {
         this.InfoRow(this.localizedText('settings_version', 'Version'), this.appVersion);
         this.DividerLine();
-        this.InfoRow(this.localizedText('settings_product', 'Product'), this.localizedText('settings_product_name', 'OpenClaw Mobile for HarmonyOS'));
+        this.InfoRow(this.localizedText('settings_product', 'Product'), this.localizedText('settings_product_name', 'IntentX Agent for HarmonyOS'));
         this.DividerLine();
         this.InfoRow(this.localizedText('settings_connection', 'Connection'), this.viewModel.isConnected ? this.localizedText('chat_connected', 'Connected') : this.localizedText('chat_offline', 'Offline'));
       }

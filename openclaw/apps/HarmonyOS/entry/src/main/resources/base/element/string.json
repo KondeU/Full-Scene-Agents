@@ -2,15 +2,15 @@
   "string": [
     {
       "name": "module_desc",
-      "value": "HealthAgent Mobile Entry Module"
+      "value": "IntentX Agent Entry Module"
     },
     {
       "name": "EntryAbility_desc",
-      "value": "HealthAgent Mobile Application"
+      "value": "IntentX Agent"
     },
     {
       "name": "EntryAbility_label",
-      "value": "HealthAgent"
+      "value": "IntentX Agent"
     },
     {
       "name": "internet_permission_reason",
@@ -106,7 +106,7 @@
     },
     {
       "name": "chat_empty_description",
-      "value": "Send a message to begin chatting with HealthAgent."
+      "value": "Send a message to begin chatting with IntentX Agent."
     },
     {
       "name": "chat_tools_running",
@@ -406,7 +406,7 @@
     },
     {
       "name": "import_header_subtitle",
-      "value": "Take a photo or pick from album to import into OpenClaw."
+      "value": "Take a photo or pick from album to import into IntentX Agent."
     },
     {
       "name": "import_action_camera",
@@ -566,11 +566,11 @@
     },
     {
       "name": "reminder_form_desc",
-      "value": "Reminder card for OpenClaw"
+      "value": "Reminder card for IntentX Agent"
     },
     {
       "name": "reminder_form_label",
-      "value": "OpenClaw Reminder"
+      "value": "IntentX Agent Reminder"
     },
     {
       "name": "reminder_form_display_name",
@@ -926,7 +926,7 @@
     },
     {
       "name": "settings_product_name",
-      "value": "HealthAgent Mobile for HarmonyOS"
+      "value": "IntentX Agent for HarmonyOS"
     },
     {
       "name": "settings_connection",
@@ -994,7 +994,7 @@
     },
     {
       "name": "onboarding_title",
-      "value": "HealthAgent\nMobile Setup"
+      "value": "IntentX Agent\nMobile Setup"
     },
     {
       "name": "onboarding_step_counter",
@@ -1062,7 +1062,7 @@
     },
     {
       "name": "onboarding_setup_code_placeholder",
-      "value": "Paste code from healthagent qr --setup-code-only"
+      "value": "Paste code from openclaw qr --setup-code-only"
     },
     {
       "name": "onboarding_quickfill_emulator",
@@ -1298,7 +1298,7 @@
     },
     {
       "name": "widget_display_name",
-      "value": "HealthAgent Widget"
+      "value": "IntentX Agent Widget"
     },
     {
       "name": "widget_description",

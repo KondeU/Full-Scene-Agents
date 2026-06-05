@@ -2,15 +2,15 @@
   "string": [
     {
       "name": "module_desc",
-      "value": "HealthAgent 移动入口模块"
+      "value": "IntentX Agent 移动入口模块"
     },
     {
       "name": "EntryAbility_desc",
-      "value": "HealthAgent 移动应用程序"
+      "value": "IntentX Agent 移动应用程序"
     },
     {
       "name": "EntryAbility_label",
-      "value": "HealthAgent"
+      "value": "IntentX Agent"
     },
     {
       "name": "internet_permission_reason",
@@ -106,7 +106,7 @@
     },
     {
       "name": "chat_empty_description",
-      "value": "发送一条消息，开始与 HealthAgent 对话。"
+      "value": "发送一条消息，开始与 IntentX Agent 对话。"
     },
     {
       "name": "chat_tools_running",
@@ -926,7 +926,7 @@
     },
     {
       "name": "settings_product_name",
-      "value": "HealthAgent HarmonyOS 移动版"
+      "value": "IntentX Agent HarmonyOS 移动版"
     },
     {
       "name": "settings_connection",
@@ -994,7 +994,7 @@
     },
     {
       "name": "onboarding_title",
-      "value": "HealthAgent\n移动端设置"
+      "value": "IntentX Agent\n移动端设置"
     },
     {
       "name": "onboarding_step_counter",
@@ -1062,7 +1062,7 @@
     },
     {
       "name": "onboarding_setup_code_placeholder",
-      "value": "粘贴 healthagent qr --setup-code-only 生成的设置码"
+      "value": "粘贴 openclaw qr --setup-code-only 生成的设置码"
     },
     {
       "name": "onboarding_quickfill_emulator",
@@ -1298,7 +1298,7 @@
     },
     {
       "name": "widget_display_name",
-      "value": "HealthAgent 卡片"
+      "value": "IntentX Agent 卡片"
     },
     {
       "name": "widget_description",

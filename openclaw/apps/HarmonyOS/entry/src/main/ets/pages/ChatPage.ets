@@ -261,7 +261,7 @@ export struct ChatPage {
       this.MessageAvatar(false);
 
       Column({ space: 4 }) {
-        Text('HealthAgent')
+        Text('IntentX Agent')
           .fontSize(11)
           .fontWeight(FontWeight.Medium)
           .fontColor('#8A92A2');

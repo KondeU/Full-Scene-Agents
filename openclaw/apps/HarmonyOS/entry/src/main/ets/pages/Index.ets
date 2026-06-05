@@ -28,7 +28,7 @@ struct Index {
     Column() {
       if (!this.ready) {
         Column({ space: 12 }) {
-          Text('HealthAgent')
+          Text('IntentX Agent')
             .fontSize(28)
             .fontWeight(FontWeight.Bold)
             .fontColor('#17181C');

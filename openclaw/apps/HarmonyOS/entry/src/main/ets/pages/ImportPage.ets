@@ -59,7 +59,7 @@ export struct ImportPage {
         .fontWeight(FontWeight.Bold)
         .fontColor('#17181C');
 
-      Text(this.localizedText('import_header_subtitle', 'Take a photo or pick from album to import into OpenClaw.'))
+      Text(this.localizedText('import_header_subtitle', 'Take a photo or pick from album to import into IntentX Agent.'))
         .fontSize(14)
         .fontWeight(FontWeight.Medium)
         .fontColor('#4D5563');

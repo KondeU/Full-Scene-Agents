@@ -81,7 +81,7 @@ export struct PostOnboardingTabs {
 
   @Builder StatusBar() {
     Row() {
-      Text('HealthAgent')
+      Text('IntentX Agent')
         .fontSize(20)
         .fontWeight(FontWeight.Bold)
         .fontColor('#17181C');

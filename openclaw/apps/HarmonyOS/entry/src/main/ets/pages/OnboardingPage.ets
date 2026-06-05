@@ -143,7 +143,7 @@ export struct OnboardingPage {
           .fontColor(C_ACCENT)
           .letterSpacing(1.5);
 
-        Text(this.localizedText('onboarding_title', 'OpenClaw\nMobile Setup'))
+        Text(this.localizedText('onboarding_title', 'IntentX Agent\nMobile Setup'))
           .fontSize(34)
           .fontWeight(FontWeight.Bold)
           .fontColor(C_TEXT)

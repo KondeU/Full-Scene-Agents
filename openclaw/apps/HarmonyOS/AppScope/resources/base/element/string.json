@@ -2,11 +2,11 @@
   "string": [
     {
       "name": "app_name",
-      "value": "HealthAgent"
+      "value": "IntentX Agent"
     },
     {
       "name": "app_description",
-      "value": "HealthAgent - HarmonyOS Client"
+      "value": "IntentX Agent - HarmonyOS Client"
     }
   ]
 }

@@ -32,7 +32,8 @@
           }
         ]
       }
-    ],    "extensionAbilities": [
+    ],
+    "extensionAbilities": [
       {
         "name": "ReminderFormExtension",
         "srcEntry": "./ets/form/ReminderFormExtension.ets",
