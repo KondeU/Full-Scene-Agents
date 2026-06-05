@@ -57,13 +57,9 @@ export class CardReminderService {
       ' hasImage=' + (content.imageUrl.length > 0) +
       ' formIdsCount=' + this.formIds.length);
 
-    if (this.formIds.length === 0) {
-      this.refreshFormIds().then(() => {
-        if (this.formIds.length > 0) this.doPush();
-      });
-      return;
-    }
-    this.doPush();
+    this.refreshFormIds().then(() => {
+      if (this.formIds.length > 0) this.doPush();
+    });
   }
 
   resetToDefault(): void {
