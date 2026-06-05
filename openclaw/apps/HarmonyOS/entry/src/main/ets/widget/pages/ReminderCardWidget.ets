@@ -11,37 +11,47 @@ struct ReminderCardWidget {
 
   build() {
     Row() {
+      // ── 左侧文字区 ──
       Column() {
         if (this.title.length > 0) {
           Text(this.title)
-            .fontSize(14).fontWeight(FontWeight.Bold).fontColor('#17181C')
-            .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis });
+            .fontSize(14).fontWeight(500).fontColor('#E5000000')
+            .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+            .margin({ bottom: 6 });
         }
 
         Text(this.body)
-          .fontSize(12).fontWeight(FontWeight.Medium).fontColor('#4D5563')
+          .fontSize(12).fontWeight(400).fontColor('#99000000')
           .maxLines(this.hasImageStr === 'true' ? 3 : 5)
-          .textOverflow({ overflow: TextOverflow.Ellipsis });
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+          .lineHeight(18);
 
         if (this.note.length > 0) {
           Text(this.note)
-            .fontSize(10).fontWeight(FontWeight.Normal).fontColor('#8A92A2')
-            .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis });
+            .fontSize(10).fontWeight(400).fontColor('#66000000')
+            .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+            .margin({ top: 6 });
         }
       }
       .layoutWeight(this.hasImageStr === 'true' ? 1 : 0)
       .width(this.hasImageStr === 'true' ? '60%' : '100%')
-      .justifyContent(FlexAlign.Start).alignItems(HorizontalAlign.Start)
-      .padding({ left: 12, right: 4, top: 10, bottom: 10 });
+      .alignItems(HorizontalAlign.Start).justifyContent(FlexAlign.Center)
+      .padding({ left: 14, right: this.hasImageStr === 'true' ? 8 : 14, top: 14, bottom: 14 });
 
+      // ── 右侧图片区 ──
       if (this.hasImageStr === 'true') {
         Image('memory://' + this.imgSrc)
-          .width('38%').height('100%').objectFit(ImageFit.Cover)
-          .borderRadius(8).margin({ right: 12 }).alt($r('app.media.icon'));
+          .width(56).height(56)
+          .objectFit(ImageFit.Cover)
+          .borderRadius(12)
+          .margin({ right: 14 })
+          .alt($r('app.media.icon'));
       }
     }
+    .alignItems(VerticalAlign.Center)
     .width('100%').height('100%')
-    .backgroundColor('#F0F4FA').borderRadius(16)
+    .backgroundColor('#FFFFFF')
+    .borderRadius(16)
     .onClick(() => {
       postCardAction(this, {
         action: 'router', abilityName: 'EntryAbility',
