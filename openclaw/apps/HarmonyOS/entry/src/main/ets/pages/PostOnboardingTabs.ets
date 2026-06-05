@@ -14,6 +14,7 @@ import { DebugPage } from './DebugPage';
 export struct PostOnboardingTabs {
   @ObjectLink viewModel: MainViewModel;
   @StorageProp('localeVersion') localeVersion: number = 0;
+  @StorageLink('pendingActiveTab') @Watch('applyPendingTab') pendingActiveTab: number = -1;
 
   @State activeTab: number = 0;
   @State connectedState: boolean = false;
@@ -23,6 +24,7 @@ export struct PostOnboardingTabs {
   private connectionStateListenerId: number = -1;
 
   aboutToAppear(): void {
+    this.applyPendingTab();
     this.syncTabSideEffects();
     this.syncConnectionState();
     this.connectionStateListenerId = this.viewModel.addConnectionStateListener(() => {
@@ -34,6 +36,14 @@ export struct PostOnboardingTabs {
     if (this.connectionStateListenerId >= 0) {
       this.viewModel.removeConnectionStateListener(this.connectionStateListenerId);
       this.connectionStateListenerId = -1;
+    }
+  }
+
+  private applyPendingTab(): void {
+    if (typeof this.pendingActiveTab === 'number' && this.pendingActiveTab >= 0 && this.pendingActiveTab <= 6) {
+      this.activeTab = this.pendingActiveTab;
+      this.syncTabSideEffects();
+      this.pendingActiveTab = -1;
     }
   }
 

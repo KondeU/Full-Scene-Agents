@@ -55,7 +55,7 @@ struct ReminderCardWidget {
     .onClick(() => {
       postCardAction(this, {
         action: 'router', abilityName: 'EntryAbility',
-        params: { targetPage: 'debug' }
+        params: { targetPage: 'import' }
       });
     });
   }
