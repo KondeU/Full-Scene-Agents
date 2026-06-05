@@ -6,7 +6,7 @@ struct ReminderCardWidget {
   @LocalStorageProp('title') title: string = '';
   @LocalStorageProp('body') body: string = '当前无主动提醒';
   @LocalStorageProp('note') note: string = '';
-  @LocalStorageProp('imageUrl') imageUrl: string = '';
+  @LocalStorageProp('imgSrc') imgSrc: string = '';
   @LocalStorageProp('hasImage') hasImageStr: string = 'false';
 
   build() {
@@ -34,8 +34,8 @@ struct ReminderCardWidget {
       .justifyContent(FlexAlign.Start).alignItems(HorizontalAlign.Start)
       .padding({ left: 12, right: 4, top: 10, bottom: 10 });
 
-      if (this.hasImageStr === 'true' && this.imageUrl.length > 0) {
-        Image(this.imageUrl)
+      if (this.hasImageStr === 'true') {
+        Image('memory://' + this.imgSrc)
           .width('38%').height('100%').objectFit(ImageFit.Cover)
           .borderRadius(8).margin({ right: 12 }).alt($r('app.media.icon'));
       }
@@ -44,8 +44,7 @@ struct ReminderCardWidget {
     .backgroundColor('#F0F4FA').borderRadius(16)
     .onClick(() => {
       postCardAction(this, {
-        action: 'router',
-        abilityName: 'EntryAbility',
+        action: 'router', abilityName: 'EntryAbility',
         params: { targetPage: 'debug' }
       });
     });

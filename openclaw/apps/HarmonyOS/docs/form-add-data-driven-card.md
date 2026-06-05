@@ -124,7 +124,12 @@ Form Kit 的卡片运行在独立进程（FormExtension），与主应用进程�
 - **主 → 卡片**：`formProvider.updateForm(formId, formBindingData)` —— 主应用进程主动推送 JSON 数据到卡片进程
 - **卡片 → 主应用**：卡片 UI 的 `onClick` 通过 `postCardAction` 发送路由/消息事件，主应用 `EntryAbility.onFormEvent` 接收
 
-对于 `imageUrl`：卡片中的 `Image` 组件支持网络 URL（http/https），所以卡片直接用 imageUrl 渲染即可，不需要在主进程中下载图片再传递文件。
+对于 `imageUrl`：**HarmonyOS NEXT Widget 卡片的 `Image()` 组件不支持直接加载 HTTP/HTTPS 网络 URL**（卡片运行在受限沙箱中）。正确的传递方式：
+1. 主进程通过 `@kit.NetworkKit` 将图片下载到应用沙箱内的临时目录
+2. 以只读模式打开文件，获取文件描述符 (fd)
+3. 通过 `formBindingData` 的 `formImages` 字段传递 `{ imgKey: fd }`，Widget 中 `Image('imgKey')` 引用该 key
+
+> **注意**：`formImages` 中传递的 fd 由 Form Kit 框架接管生命周期。调用 `updateForm` 后应立即关闭本端的 fd，避免泄漏。临时文件可在下次推送新图片前删除。
 
 ---
 
@@ -139,6 +144,12 @@ Form Kit 的卡片运行在独立进程（FormExtension），与主应用进程�
 ```typescript
 import { formProvider, formBindingData } from '@kit.FormKit';
 import { InvokeRequest, InvokeResult } from '../api/GatewaySession';
+import { http } from '@kit.NetworkKit';
+import { fileIo } from '@kit.CoreFileKit';
+import { BusinessError } from '@kit.BasicServicesKit';
+
+/** formImages 中图片资源的固定 key，Widget 端通过 Image('reminderImg') 引用 */
+const FORM_IMAGE_KEY = 'reminderImg';
 
 export class ReminderCardContent {
   title: string = '';
@@ -150,6 +161,8 @@ export class ReminderCardContent {
 export class CardReminderService {
   private formIds: string[] = [];
   private currentContent: ReminderCardContent;
+  /** 当前已下载图片的本地路径，用于更新时清理旧资源 */
+  private currentImagePath: string = '';
 
   constructor() {
     this.currentContent = new ReminderCardContent();
@@ -165,9 +178,7 @@ export class CardReminderService {
 
   addFormId(formId: string): void {
     const trimmed = formId.trim();
-    if (trimmed.length === 0) {
-      return;
-    }
+    if (trimmed.length === 0) return;
     if (this.formIds.indexOf(trimmed) < 0) {
       this.formIds.push(trimmed);
       console.info('CardReminderService: added formId=' + trimmed);
@@ -183,48 +194,34 @@ export class CardReminderService {
     }
   }
 
-  /**
-   * 向单个 formId 推送当前内容。用于 onAddForm 时立即填充新卡片。
-   */
   pushCurrentToForm(formId: string): void {
-    if (!formId || formId.trim().length === 0) {
-      return;
-    }
-    try {
-      const bindingData = this.buildFormBindingData();
-      formProvider.updateForm(formId, bindingData);
-      console.info('CardReminderService: pushed current content to formId=' + formId);
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-      console.warn('CardReminderService: pushCurrentToForm failed for formId=' + formId + ', error=' + errorMsg);
-    }
+    if (!formId || formId.trim().length === 0) return;
+    this.buildAndPush(formId);
   }
 
   updateReminderCard(content: ReminderCardContent): void {
     this.currentContent = content;
-    this.pushToAllForms();
-    console.info(
-      'CardReminderService: updateReminderCard, title=' + content.title +
-      ', body=' + content.body + ', note=' + content.note +
-      ', imageUrl=' + content.imageUrl
-    );
+    // 若内容不含图片 URL，清理旧文件
+    if (content.imageUrl.length === 0) {
+      this.cleanupImageFile();
+      this.pushToAllForms();
+      return;
+    }
+    // 先下载图片，再推送
+    this.downloadAndPush();
   }
 
   resetToDefault(): void {
-    const defaultContent = new ReminderCardContent();
-    defaultContent.title = '';
-    defaultContent.body = '当前无主动提醒';
-    defaultContent.note = '';
-    defaultContent.imageUrl = '';
-    this.updateReminderCard(defaultContent);
+    const c = new ReminderCardContent();
+    c.body = '当前无主动提醒';
+    this.updateReminderCard(c);
   }
 
   handleUpdateReminderCommand(request: InvokeRequest): InvokeResult {
     const paramsJson = request.paramsJson.trim();
     if (paramsJson.length === 0) {
-      return InvokeResult.error('INVALID_PARAMS', 'Missing paramsJson for card.reminder.update');
+      return InvokeResult.error('INVALID_PARAMS', 'Missing paramsJson');
     }
-
     try {
       const parsed = JSON.parse(paramsJson) as Record<string, string>;
       const content = new ReminderCardContent();
@@ -232,17 +229,75 @@ export class CardReminderService {
       content.body = (parsed['body'] || '').trim();
       content.note = (parsed['note'] || '').trim();
       content.imageUrl = (parsed['imageUrl'] || '').trim();
-
       if (content.body.length === 0) {
-        return InvokeResult.error('INVALID_PARAMS', 'body is required for card.reminder.update');
+        return InvokeResult.error('INVALID_PARAMS', 'body is required');
       }
-
       this.updateReminderCard(content);
       return InvokeResult.ok(JSON.stringify({ ok: true, formIdsCount: this.formIds.length }));
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : 'Invalid JSON';
-      return InvokeResult.error('INVALID_PARAMS', 'Failed to parse paramsJson: ' + errorMsg);
+    } catch (e) {
+      return InvokeResult.error('INVALID_PARAMS', 'Failed to parse paramsJson');
     }
+  }
+
+  // ─── 图片处理 ───
+
+  /** 下载图片到临时目录，返回本地路径。失败返回空字符串。 */
+  private async downloadImage(url: string): Promise<string> {
+    try {
+      const httpReq = http.createHttp();
+      const resp = await httpReq.request(url, { method: http.RequestMethod.GET, expectDataType: http.HttpDataType.ARRAY_BUFFER });
+      httpReq.destroy();
+      if (resp.result instanceof ArrayBuffer && resp.result.byteLength > 0) {
+        const buf = new Uint8Array(resp.result as ArrayBuffer);
+        // 写入沙箱临时目录
+        const ctx = AppStorage.get<Context>('abilityContext');
+        const tmpDir = ctx ? ctx.tempDir : '/data/storage/el2/base/temp/';
+        const fileName = 'reminder_img_' + Date.now() + '.cache';
+        const filePath = tmpDir + '/' + fileName;
+        const fd = fileIo.openSync(filePath, fileIo.OpenMode.CREATE | fileIo.OpenMode.WRITE_ONLY | fileIo.OpenMode.TRUNC);
+        fileIo.writeSync(fd, buf.buffer);
+        fileIo.closeSync(fd);
+        console.info('CardReminderService: downloaded image to ' + filePath + ', size=' + buf.length);
+        return filePath;
+      }
+    } catch (e) {
+      const be = e as BusinessError;
+      console.error('CardReminderService: downloadImage failed: ' + be.message);
+    }
+    return '';
+  }
+
+  /** 删除旧图片文件，释放磁盘空间 */
+  private cleanupImageFile(): void {
+    if (this.currentImagePath.length === 0) return;
+    try {
+      fileIo.unlinkSync(this.currentImagePath);
+      console.info('CardReminderService: cleaned up old image: ' + this.currentImagePath);
+    } catch (e) {
+      console.warn('CardReminderService: cleanupImageFile failed: ' + (e as Error).message);
+    }
+    this.currentImagePath = '';
+  }
+
+  /** 下载图片后推送到所有卡片 */
+  private async downloadAndPush(): Promise<void> {
+    const url = this.currentContent.imageUrl;
+    if (url.length === 0) return;
+    const localPath = await this.downloadImage(url);
+    if (localPath.length > 0) {
+      this.cleanupImageFile(); // 先清理旧图片
+      this.currentImagePath = localPath;
+    }
+    this.pushToAllForms();
+  }
+
+  // ─── 推送 ───
+
+  private buildAndPush(formId: string): void {
+    const bindingData = this.buildFormBindingData();
+    formProvider.updateForm(formId, bindingData)
+      .then(() => console.info('CardReminderService: pushed to formId=' + formId))
+      .catch((err: Error) => console.warn('CardReminderService: push failed ' + err.message));
   }
 
   private pushToAllForms(): void {
@@ -250,35 +305,44 @@ export class CardReminderService {
       console.info('CardReminderService: no formIds registered, skipping push');
       return;
     }
-
     const bindingData = this.buildFormBindingData();
-
     for (let i = 0; i < this.formIds.length; i++) {
       const formId = this.formIds[i];
-      try {
-        formProvider.updateForm(formId, bindingData);
-        console.info('CardReminderService: pushed update to formId=' + formId);
-      } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-        console.warn('CardReminderService: updateForm failed for formId=' + formId + ', error=' + errorMsg);
-        if (errorMsg.includes('not found') || errorMsg.includes('deleted') || errorMsg.includes('invalid')) {
-          this.formIds.splice(i, 1);
-          i--;
-          console.info('CardReminderService: pruned invalid formId=' + formId);
-        }
-      }
+      formProvider.updateForm(formId, bindingData)
+        .then(() => console.info('CardReminderService: pushed to formId=' + formId))
+        .catch((err: Error) => {
+          if (err.message.includes('not found') || err.message.includes('deleted')) {
+            this.formIds.splice(i, 1);
+            i--;
+          }
+        });
     }
+    // updateForm 调用完成后关闭 fd（Form Kit 框架已接管），但文件本身保留供后续推送
+  }
+
+  buildCurrentFormBindingData(): formBindingData.FormBindingData {
+    return this.buildFormBindingData();
   }
 
   private buildFormBindingData(): formBindingData.FormBindingData {
-    const data: Record<string, string> = {
+    const hasImg = this.currentImagePath.length > 0;
+    const data: Record<string, Object | string> = {
       'title': this.currentContent.title,
       'body': this.currentContent.body,
       'note': this.currentContent.note,
-      'imageUrl': this.currentContent.imageUrl,
-      'hasImage': this.currentContent.imageUrl.length > 0 ? 'true' : 'false',
-      'hasNote': this.currentContent.note.length > 0 ? 'true' : 'false'
+      'hasImage': hasImg ? 'true' : 'false'
     };
+
+    if (hasImg) {
+      // imgSrc 供 Widget 的 Image(imgSrc) 引用 formImages 中的 key
+      data['imgSrc'] = FORM_IMAGE_KEY;
+      // formImages：传递文件描述符给卡片进程
+      const fd = fileIo.openSync(this.currentImagePath, fileIo.OpenMode.READ_ONLY);
+      const formImages: Record<string, number> = {};
+      formImages[FORM_IMAGE_KEY] = fd;
+      data['formImages'] = formImages;
+    }
+
     return formBindingData.createFormBindingData(data);
   }
 }
@@ -292,7 +356,12 @@ export const cardReminderService = new CardReminderService();
 2. **默认内容**：构造函数中初始化为 "当前无主动提醒"（只有 body，title/note/imageUrl 为空）。
 3. **双通道汇聚**：`handleUpdateReminderCommand()` 是 invoke 入口，`updateReminderCard()` 是本地 API 入口，两者最终都调用同一 `pushToAllForms()`。
 4. **无效 formId 自动清理**：`updateForm()` 失败且错误包含 "not found/deleted/invalid" 时，自动从列表移除。
-5. **hasImage/hasNote**：卡片 UI 用这两个布尔标记做条件渲染，避免在 ArkTS 卡片中做字符串长度判断（部分受限环境中 `.length` 可能不可靠）。
+5. **图片下载 + formImages 传递**：
+   - `downloadImage(url)` 使用 `@kit.NetworkKit` http 请求下载图片到沙箱临时目录
+   - `buildFormBindingData()` 中若 `currentImagePath` 有效，以只读方式打开 fd，通过 `formImages: { reminderImg: fd }` 传递给卡片
+   - 卡片 Widget 中 `Image('reminderImg')` 通过 key 引用该 fd
+   - `downloadAndPush()` 在 `updateReminderCard` 有图片 URL 时异步执行下载→清理旧文件→推送
+6. **资源清理**：`currentImagePath` 追踪当前图片路径。每次下载新图片前 `cleanupImageFile()` 删除旧临时文件。无图片时（resetToDefault 等）同样触发清理。
 
 ---
 
@@ -355,71 +424,55 @@ export default class ReminderFormExtension extends FormExtension {
 **卡片支持尺寸**：2×2（标准小卡片）和 2×4（横宽卡片）。
 
 ```typescript
-@Entry
+let storage = new LocalStorage();
+
+@Entry(storage)
 @Component
 struct ReminderCardWidget {
-  @State title: string = '';
-  @State body: string = '当前无主动提醒';
-  @State note: string = '';
-  @State imageUrl: string = '';
-  @State hasImage: string = 'false';
-  @State hasNote: string = 'false';
+  @LocalStorageProp('title') title: string = '';
+  @LocalStorageProp('body') body: string = '当前无主动提醒';
+  @LocalStorageProp('note') note: string = '';
+  @LocalStorageProp('imgSrc') imgSrc: string = '';
+  @LocalStorageProp('hasImage') hasImageStr: string = 'false';
 
   build() {
     Row() {
       Column() {
         if (this.title.length > 0) {
           Text(this.title)
-            .fontSize(14)
-            .fontWeight(FontWeight.Bold)
-            .fontColor('#17181C')
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis });
+            .fontSize(14).fontWeight(FontWeight.Bold).fontColor('#17181C')
+            .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis });
         }
 
         Text(this.body)
-          .fontSize(12)
-          .fontWeight(FontWeight.Medium)
-          .fontColor('#4D5563')
-          .maxLines(this.hasImage === 'true' ? 3 : 5)
+          .fontSize(12).fontWeight(FontWeight.Medium).fontColor('#4D5563')
+          .maxLines(this.hasImageStr === 'true' ? 3 : 5)
           .textOverflow({ overflow: TextOverflow.Ellipsis });
 
-        if (this.hasNote === 'true') {
+        if (this.note.length > 0) {
           Text(this.note)
-            .fontSize(10)
-            .fontWeight(FontWeight.Normal)
-            .fontColor('#8A92A2')
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis });
+            .fontSize(10).fontWeight(FontWeight.Normal).fontColor('#8A92A2')
+            .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis });
         }
       }
-      .layoutWeight(this.hasImage === 'true' ? 1 : 0)
-      .width(this.hasImage === 'true' ? '60%' : '100%')
-      .justifyContent(FlexAlign.Start)
-      .alignItems(HorizontalAlign.Start)
+      .layoutWeight(this.hasImageStr === 'true' ? 1 : 0)
+      .width(this.hasImageStr === 'true' ? '60%' : '100%')
+      .justifyContent(FlexAlign.Start).alignItems(HorizontalAlign.Start)
       .padding({ left: 12, right: 4, top: 10, bottom: 10 });
 
-      if (this.hasImage === 'true') {
-        Image(this.imageUrl)
-          .width('38%')
-          .height('100%')
-          .objectFit(ImageFit.Cover)
-          .borderRadius(8)
-          .margin({ right: 12 })
-          .alt($r('app.media.icon'));
+      if (this.hasImageStr === 'true') {
+        // imgSrc 引用 formImages 中的 key（如 'reminderImg'），框架自动通过 fd 读取图片数据
+        Image(this.imgSrc)
+          .width('38%').height('100%').objectFit(ImageFit.Cover)
+          .borderRadius(8).margin({ right: 12 }).alt($r('app.media.icon'));
       }
     }
-    .width('100%')
-    .height('100%')
-    .backgroundColor('#FFFFFF')
-    .borderRadius(16)
+    .width('100%').height('100%')
+    .backgroundColor('#F0F4FA').borderRadius(16)
     .onClick(() => {
       postCardAction(this, {
-        action: 'router',
-        abilityName: 'EntryAbility',
-        params: {
-          targetPage: 'debug'
-        }
+        action: 'router', abilityName: 'EntryAbility',
+        params: { targetPage: 'debug' }
       });
     });
   }
@@ -444,11 +497,13 @@ struct ReminderCardWidget {
 
 5. **标题行可选**：`if (this.title.length > 0)` 控制第一行。默认内容没有标题，只显示 body。
 
-6. **图片加载失败兜底**：`.alt($r('app.media.icon'))` 使用应用图标作为 fallback。
+6. **图片传递机制**：Widget 卡片不支持直接加载 HTTP URL。CardReminderService 先将图片下载到沙箱临时目录，然后通过 `formBindingData` 的 `formImages: { reminderImg: fd }` 以文件描述符形式传递给卡片进程。卡片中 `Image('reminderImg')` 通过 key 引用该 fd。`alt($r('app.media.icon'))` 作为下载失败/无图片时的兜底图标。
 
-7. **点击跳转**：`postCardAction` 使用 `router` 模式跳转到 `EntryAbility`，传递 `targetPage: 'debug'` 参数，让 EntryAbility 可以在收到卡片点击时自动切换到调试 Tab。
+7. **资源清理**：`CardReminderService` 通过 `currentImagePath` 追踪当前图片路径。每次推送新图片前调用 `cleanupImageFile()` 删除旧文件，避免磁盘空间泄漏。`updateForm` 调用完成后 Form Kit 框架接管 fd 生命周期，Service 端无需手动关闭。
 
-8. **为什么不直接用 `this.imageUrl.length > 0` 做条件渲染？** ArkTS 卡片受限环境中部分字符串属性访问可能有兼容性差异，使用 `hasImage`/`hasNote` 布尔标记字符串更可靠。这是 HarmonyOS 官方卡片开发推荐的实践。
+8. **点击跳转**：`postCardAction` 使用 `router` 模式跳转到 `EntryAbility`，传递 `targetPage: 'debug'` 参数。
+
+9. **为什么用 `hasImage`/`hasNote` 布爾字符串？** ArkTS 卡片受限环境中部分字符串属性访问可能有兼容性差异，使用 `hasImage` 布尔标记字符串更可靠，是 HarmonyOS 官方推荐的实践。
 
 ---
 
