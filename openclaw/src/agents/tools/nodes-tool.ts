@@ -35,6 +35,7 @@ const NODES_TOOL_ACTIONS = [
   "device_info",
   "device_permissions",
   "device_health",
+  "card_reminder_update",
   "invoke",
 ] as const;
 
@@ -116,6 +117,11 @@ const NodesToolSchema = Type.Object({
   invokeCommand: Type.Optional(Type.String()),
   invokeParamsJson: Type.Optional(Type.String()),
   invokeTimeoutMs: Type.Optional(Type.Number()),
+  // card_reminder_update
+  cardTitle: Type.Optional(Type.String({ description: "Optional card title shown above the body" })),
+  cardBody: Type.Optional(Type.String({ description: "Main card body text, bold and darkest" })),
+  cardNote: Type.Optional(Type.String({ description: "Optional footer note below the body" })),
+  cardImageUrl: Type.Optional(Type.String({ description: "Optional right-side image URL (http/https)" })),
 });
 
 export function createNodesTool(options?: {
@@ -138,7 +144,7 @@ export function createNodesTool(options?: {
     name: "nodes",
     ownerOnly: isOpenClawOwnerOnlyCoreToolName("nodes"),
     description:
-      "Discover and control paired nodes (status/describe/pairing/notify/camera/photos/screen/location/notifications/invoke).",
+      "Discover and control paired nodes (status/describe/pairing/notify/camera/photos/screen/location/notifications/card_reminder/invoke).",
     parameters: NodesToolSchema,
     execute: async (_toolCallId, args) => {
       const params = args as Record<string, unknown>;
@@ -200,6 +206,32 @@ export function createNodesTool(options?: {
                 priority: typeof params.priority === "string" ? params.priority : undefined,
                 delivery: typeof params.delivery === "string" ? params.delivery : undefined,
               },
+              idempotencyKey: crypto.randomUUID(),
+            });
+            return jsonResult({ ok: true });
+          }
+          case "card_reminder_update": {
+            const node = readStringParam(params, "node", { required: true });
+            const cardBody = typeof params.cardBody === "string" ? params.cardBody.trim() : "";
+            if (!cardBody) {
+              throw new Error("cardBody is required");
+            }
+            const nodeId = await resolveNodeId(gatewayOpts, node);
+            const commandParams: Record<string, string | undefined> = {};
+            commandParams.body = cardBody;
+            if (typeof params.cardTitle === "string" && params.cardTitle.trim()) {
+              commandParams.title = params.cardTitle.trim();
+            }
+            if (typeof params.cardNote === "string" && params.cardNote.trim()) {
+              commandParams.note = params.cardNote.trim();
+            }
+            if (typeof params.cardImageUrl === "string" && params.cardImageUrl.trim()) {
+              commandParams.imageUrl = params.cardImageUrl.trim();
+            }
+            await callGatewayTool("node.invoke", gatewayOpts, {
+              nodeId,
+              command: "card.reminder.update",
+              params: commandParams,
               idempotencyKey: crypto.randomUUID(),
             });
             return jsonResult({ ok: true });
