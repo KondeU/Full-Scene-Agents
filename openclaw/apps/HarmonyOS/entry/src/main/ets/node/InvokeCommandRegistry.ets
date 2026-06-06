@@ -1,9 +1,10 @@
 import { OpenClawCapability, OpenClawDeviceCommand } from '../protocol/OpenClawProtocolConstants';
-import { OpenClawCardCommand } from '../protocol/OpenClawProtocolConstants';
+import { OpenClawCardCommand, OpenClawLocationCommand } from '../protocol/OpenClawProtocolConstants';
 
 export class HarmonyNodeRuntimeFlags {
   deviceInfoAvailable: boolean = true;
   cardReminderAvailable: boolean = true;
+  locationAvailable: boolean = true;
 }
 
 export class InvokeCommandSpec {
@@ -22,7 +23,8 @@ export class InvokeCommandRegistry {
     new InvokeCommandSpec(OpenClawDeviceCommand.Info),
     new InvokeCommandSpec(OpenClawDeviceCommand.Permissions),
     new InvokeCommandSpec(OpenClawCardCommand.ReminderUpdate),
-    new InvokeCommandSpec(OpenClawDeviceCommand.Health)
+    new InvokeCommandSpec(OpenClawDeviceCommand.Health),
+    new InvokeCommandSpec(OpenClawLocationCommand.Get)
   ];
 
   static find(command: string): InvokeCommandSpec | null {
@@ -39,6 +41,9 @@ export class InvokeCommandRegistry {
     if (flags.cardReminderAvailable) {
       caps.push(OpenClawCapability.Card);
     }
+    if (flags.locationAvailable) {
+      caps.push(OpenClawCapability.Location);
+    }
     return caps;
   }
 
@@ -52,6 +57,9 @@ export class InvokeCommandRegistry {
     }
     if (flags.cardReminderAvailable) {
       commands.push(OpenClawCardCommand.ReminderUpdate);
+    }
+    if (flags.locationAvailable) {
+      commands.push(OpenClawLocationCommand.Get);
     }
     return commands;
   }
