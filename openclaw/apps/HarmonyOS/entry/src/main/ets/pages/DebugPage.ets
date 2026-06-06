@@ -1,6 +1,7 @@
 import { MainViewModel } from '../viewmodel/MainViewModel';
 import { InvokeRequest } from '../api/GatewaySession';
 import { ReminderCardContent, cardReminderService } from '../service/CardReminderService';
+import { locationService } from '../service/LocationService';
 
 @Component
 export struct DebugPage {
@@ -11,6 +12,8 @@ export struct DebugPage {
   @State debugBody: string = '';
   @State debugNote: string = '';
   @State debugImageUrl: string = '';
+  @State locDesiredAccuracy: string = 'precise';
+  @State locTimeoutMs: string = '10000';
   @State pushResult: string = '';
 
   aboutToAppear(): void {
@@ -31,6 +34,8 @@ export struct DebugPage {
         }
 
         this.InvokeSimulateSection();
+
+        this.LocationInvokeSection();
       }
       .width('100%')
       .padding({ left: 20, right: 20, top: 16, bottom: 24 });
@@ -138,6 +143,77 @@ export struct DebugPage {
     this.debugNote = '';
     this.debugImageUrl = '';
     this.pushResult = 'Reset to default.';
+  }
+
+  @Builder LocationInvokeSection() {
+    Column({ space: 12 }) {
+      Text(this.localizedText('debug_location_label', 'LOCATION SIMULATION'))
+        .fontSize(12).fontWeight(FontWeight.Bold).fontColor('#C8841A');
+
+      Column({ space: 10 }) {
+        Text(this.localizedText('debug_location_desc', 'Simulate a location.get invoke command for client-side stub testing.'))
+          .fontSize(13).fontWeight(FontWeight.Medium).fontColor('#4D5563');
+
+        Row({ space: 8 }) {
+          Text('Accuracy:').fontSize(13).fontWeight(FontWeight.Medium).fontColor('#4D5563');
+
+          Button('precise')
+            .type(ButtonType.Normal)
+            .backgroundColor(this.locDesiredAccuracy === 'precise' ? '#C8841A' : '#F6F7FA')
+            .fontColor(this.locDesiredAccuracy === 'precise' ? '#FFFFFF' : '#8A92A2')
+            .fontSize(12).fontWeight(FontWeight.Bold).borderRadius(8)
+            .border({ width: 1, color: '#E5E7EC' })
+            .onClick(() => { this.locDesiredAccuracy = 'precise'; });
+
+          Button('balanced')
+            .type(ButtonType.Normal)
+            .backgroundColor(this.locDesiredAccuracy === 'balanced' ? '#C8841A' : '#F6F7FA')
+            .fontColor(this.locDesiredAccuracy === 'balanced' ? '#FFFFFF' : '#8A92A2')
+            .fontSize(12).fontWeight(FontWeight.Bold).borderRadius(8)
+            .border({ width: 1, color: '#E5E7EC' })
+            .onClick(() => { this.locDesiredAccuracy = 'balanced'; });
+
+          Button('coarse')
+            .type(ButtonType.Normal)
+            .backgroundColor(this.locDesiredAccuracy === 'coarse' ? '#C8841A' : '#F6F7FA')
+            .fontColor(this.locDesiredAccuracy === 'coarse' ? '#FFFFFF' : '#8A92A2')
+            .fontSize(12).fontWeight(FontWeight.Bold).borderRadius(8)
+            .border({ width: 1, color: '#E5E7EC' })
+            .onClick(() => { this.locDesiredAccuracy = 'coarse'; });
+        }
+
+        TextInput({ placeholder: 'Timeout (ms, default 10000)', text: this.locTimeoutMs })
+          .fontSize(13).type(InputType.Number)
+          .onChange((v: string) => { this.locTimeoutMs = v; });
+
+        Button(this.localizedText('debug_location_button', 'Simulate Location Invoke'))
+          .type(ButtonType.Normal).backgroundColor('#C8841A').fontColor('#FFFFFF')
+          .fontSize(14).fontWeight(FontWeight.Bold).borderRadius(12)
+          .onClick(() => { this.handleLocationSimulate(); });
+      }
+      .width('100%').padding(14).backgroundColor('#FFFFFF').borderRadius(14)
+      .border({ width: 1, color: '#E5E7EC' });
+    }
+    .width('100%').alignItems(HorizontalAlign.Start);
+  }
+
+  private handleLocationSimulate(): void {
+    const params: Record<string, string> = {};
+    params['desiredAccuracy'] = this.locDesiredAccuracy;
+    if (this.locTimeoutMs.trim().length > 0) {
+      params['timeoutMs'] = this.locTimeoutMs.trim();
+    }
+    const request = new InvokeRequest();
+    request.id = 'debug-location';
+    request.command = 'location.get';
+    request.paramsJson = JSON.stringify(params);
+    locationService.handleGetLocation(request).then((result) => {
+      if (result.ok) {
+        this.pushResult = 'Location result: ' + (result.payloadJson || '{}');
+      } else {
+        this.pushResult = 'Location error: ' + (result.error ? result.error.message : 'unknown');
+      }
+    });
   }
 
   private handleSimulateInvoke(): void {

@@ -91,8 +91,10 @@ Agent 工具中 `LOCATION_ACCURACY = ["coarse", "balanced", "precise"]`，经 Ga
 | `InvokeCommandRegistry.ets` | import `OpenClawLocationCommand`；`all` 数组 +1；`advertisedCapabilities` +1；`advertisedCommands` +1 | ~4 行 |
 | `NodeInvokeDispatcher.ets` | import `locationService`；switch 内 +1 case | ~2 行 |
 | `module.json5` | `requestPermissions` 新增 2 个权限声明 | ~14 行 |
+| `PostOnboardingTabs.ets` | import `abilityAccessCtrl, common`；`aboutToAppear` +1 调用；`requestLocationPermissionIfNeeded()` 方法 | ~20 行 |
+| `DebugPage.ets` | import `locationService`；`LocationInvokeSection` @Builder + handler | ~60 行 |
 
-**不改动**：MainViewModel、SecurePrefs、SettingsPage、OnboardingPage、EntryAbility — 这些文件中位置偏好已完整，直接复用。
+**不改动**：MainViewModel、SecurePrefs、SettingsPage、OnboardingPage — 位置偏好直接复用。
 
 ---
 
@@ -121,7 +123,7 @@ Agent 工具中 `LOCATION_ACCURACY = ["coarse", "balanced", "precise"]`，经 Ga
 
 ## 七、权限配置
 
-### module.json5 新增
+### 7.1 module.json5 静态声明
 
 ```json
 {
@@ -137,6 +139,18 @@ Agent 工具中 `LOCATION_ACCURACY = ["coarse", "balanced", "precise"]`，经 Ga
 ```
 
 > NOTE: HarmonyOS NEXT 要求 `APPROXIMATELY_LOCATION` 和 `LOCATION` 必须同时声明。已有的 `approximate_location_permission_reason` 和 `location_permission_reason` 字符串资源已存在于 `string.json` 中，无需新增。
+
+### 7.2 运行时动态申请
+
+`PostOnboardingTabs.aboutToAppear()` → `requestLocationPermissionIfNeeded()`，进入主页面时检查一次：
+
+```
+aboutToAppear()
+  → checkAccessToken() 已授权? 是 → 跳过（系统权限已有）
+  → requestPermissionsFromUser() → 弹出系统授权对话框
+```
+
+`checkAccessToken` 已授权则跳过，未授权则弹系统对话框申请。用户拒绝后不再打扰。
 
 ---
 
@@ -165,15 +179,18 @@ Agent 调用 location.get 时
 
 ```
 service/
-  LocationService.ets       ← 定位服务
+  LocationService.ets         ← 定位服务（75 行）
 ```
 
 ### 修改
 
 ```
 node/
-  InvokeCommandRegistry.ets ← +4 行
-  NodeInvokeDispatcher.ets   ← +2 行
+  InvokeCommandRegistry.ets   ← +5 行（import + flag + caps + commands + all）
+  NodeInvokeDispatcher.ets    ← +3 行（import + case）
+pages/
+  PostOnboardingTabs.ets      ← +25 行（import + aboutToAppear + 运行时权限申请）
+  DebugPage.ets               ← +60 行（import + state + @Builder + handler）
 entry/src/main/
-  module.json5               ← +2 个 permission 声明
+  module.json5                ← +14 行（2 个权限声明）
 ```

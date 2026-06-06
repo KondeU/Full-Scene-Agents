@@ -255,7 +255,7 @@ export struct SettingsPage {
             .fontWeight(FontWeight.Medium)
             .fontColor('#4D5563');
 
-          TextInput({ placeholder: '10.0.2.2', text: this.manualHost })
+          TextInput({ placeholder: '127.0.0.1', text: this.manualHost })
             .width('100%')
             .height(50)
             .backgroundColor('#F6F7FA')

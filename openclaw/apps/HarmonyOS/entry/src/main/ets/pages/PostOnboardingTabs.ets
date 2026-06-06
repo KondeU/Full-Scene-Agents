@@ -1,3 +1,4 @@
+import { abilityAccessCtrl, common } from '@kit.AbilityKit';
 import { MainViewModel } from '../viewmodel/MainViewModel';
 import { ConnectPage } from './ConnectPage';
 import { ChatPage } from './ChatPage';
@@ -30,6 +31,7 @@ export struct PostOnboardingTabs {
     this.connectionStateListenerId = this.viewModel.addConnectionStateListener(() => {
       this.syncConnectionState();
     });
+    this.requestLocationPermission();
   }
 
   aboutToDisappear(): void {
@@ -45,6 +47,28 @@ export struct PostOnboardingTabs {
       this.syncTabSideEffects();
       this.pendingActiveTab = -1;
     }
+  }
+
+  private requestLocationPermission(): void {
+    const atManager = abilityAccessCtrl.createAtManager();
+    const ctx = AppStorage.get<Context>('abilityContext') as common.UIAbilityContext;
+    if (!ctx) {
+      return;
+    }
+    const tokenId = ctx.applicationInfo.accessTokenId;
+    atManager.checkAccessToken(tokenId, 'ohos.permission.LOCATION')
+      .then((grantStatus: abilityAccessCtrl.GrantStatus) => {
+        if (grantStatus === abilityAccessCtrl.GrantStatus.PERMISSION_GRANTED) {
+          return;
+        }
+        return atManager.requestPermissionsFromUser(ctx, [
+          'ohos.permission.APPROXIMATELY_LOCATION',
+          'ohos.permission.LOCATION'
+        ]);
+      })
+      .catch((err: Error) => {
+        console.warn('PostOnboardingTabs: location permission check/request failed: ' + err.message);
+      });
   }
 
   private syncTabSideEffects(): void {

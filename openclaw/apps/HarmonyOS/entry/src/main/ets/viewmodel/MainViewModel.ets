@@ -114,7 +114,7 @@ export class MainViewModel {
   locationPreciseEnabled: boolean = false;
   preventSleep: boolean = false;
   manualEnabled: boolean = false;
-  manualHost: string = '';
+  manualHost: string = '127.0.0.1';
   manualPort: number = 18789;
   manualTls: boolean = false;
   gatewayToken: string = '';
