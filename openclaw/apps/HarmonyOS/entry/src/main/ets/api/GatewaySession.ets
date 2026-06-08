@@ -878,7 +878,7 @@ export class GatewaySession {
       const id: string = String(++this.requestCounter);
       const paramsLength: number = paramsJson ? paramsJson.length : 0;
 
-      console.info('GatewaySession: Sending request ' + id + ': ' + method + ', paramsLength=' + paramsLength);
+      console.info('GatewaySession: Sending request ' + id + ': ' + method + ', paramsLength=' + paramsLength + ', hasAttachments=' + ((paramsJson && paramsJson.indexOf('"attachments"') >= 0) ? 'true' : 'false'));
 
       // Add to request map
       this.requestMap.set(id, { resolve, reject });
@@ -1106,6 +1106,14 @@ export class GatewaySession {
           response.error = data.error;
           const parsedPayload = data.payload !== undefined ? data.payload : this.parsePayloadObject(data.payloadJSON);
           response.payload = parsedPayload as GatewayPayload;
+
+          console.info(
+            'GatewaySession: response id=' + data.id +
+            ', ok=' + data.ok +
+            ', error=' + (data.error ? JSON.stringify(data.error) : 'none') +
+            ', payloadKeys=' + (parsedPayload ? Object.keys(parsedPayload as object).join(',') : 'none')
+          );
+
           handler.resolve(response);
         }
       } else if (frameType === 'event' && data.event) {

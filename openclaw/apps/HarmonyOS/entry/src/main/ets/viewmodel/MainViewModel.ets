@@ -47,6 +47,7 @@ class ChatSendRequestParams {
   thinking: string = 'off';
   timeoutMs: number = 30000;
   idempotencyKey: string = '';
+  attachments?: OutgoingAttachment[] = undefined;
 }
 
 class ChatAbortRequestParams {
@@ -344,6 +345,13 @@ export class MainViewModel {
     const content = new ChatMessageContent();
     content.type = 'text';
     content.text = text;
+    return content;
+  }
+
+  private createImageContent(dataUrl: string): ChatMessageContent {
+    const content = new ChatMessageContent();
+    content.type = 'image';
+    content.imageUri = dataUrl;
     return content;
   }
 
@@ -1293,7 +1301,7 @@ export class MainViewModel {
     }
   }
 
-  sendChat(message: string, thinking: string, attachments: OutgoingAttachment[]): void {
+  sendChat(message: string, thinking: string, attachments: OutgoingAttachment[], sessionKey?: string): void {
     const trimmedMessage = message.trim();
     if (trimmedMessage.length === 0 && attachments.length === 0) {
       return;
@@ -1313,6 +1321,15 @@ export class MainViewModel {
     userMessage.role = 'user';
     const outgoingText = trimmedMessage.length > 0 ? trimmedMessage : this.getLocalizedString('chat_see_attached', 'See attached.');
     userMessage.content = [this.createTextContent(outgoingText)];
+    // 带附件时，为每张图片构建本地缩略图 content block（data URL）
+    if (attachments.length > 0) {
+      for (let attachment of attachments) {
+        if (attachment.type === 'image' && attachment.content.length > 0) {
+          const dataUrl = 'data:' + attachment.mimeType + ';base64,' + attachment.content;
+          userMessage.content.push(this.createImageContent(dataUrl));
+        }
+      }
+    }
 
     this.chatMessages = [...this.chatMessages, userMessage];
     this.chatStreamingAssistantText = null;
@@ -1322,22 +1339,54 @@ export class MainViewModel {
     this.addChatPendingRun(runId);
 
     const requestParams = new ChatSendRequestParams();
-    requestParams.sessionKey = this.chatSessionKey;
+    requestParams.sessionKey = sessionKey ?? this.chatSessionKey;
     requestParams.message = outgoingText;
     requestParams.thinking = this.chatThinkingLevel;
     requestParams.idempotencyKey = runId;
+    if (attachments.length > 0) {
+      requestParams.attachments = attachments;
+      console.info(
+        'MainViewModel.sendChat: attaching ' + attachments.length +
+        ' attachment(s), first mimeType=' + attachments[0].mimeType +
+        ', contentLen=' + attachments[0].content.length
+      );
+    } else {
+      console.info('MainViewModel.sendChat: no attachments');
+    }
 
-    this.operatorSession.request('chat.send', JSON.stringify(requestParams)).then((response) => {
+    const paramsJson = JSON.stringify(requestParams);
+    console.info(
+      'MainViewModel.sendChat: paramsJson length=' + paramsJson.length +
+      ', hasAttachments=' + (paramsJson.indexOf('"attachments"') >= 0)
+    );
+
+    this.operatorSession.request('chat.send', paramsJson).then((response) => {
+      console.info(
+        'MainViewModel.sendChat: chat.send response received, success=' + response.result.success +
+        ', error=' + (response.error ? JSON.stringify(response.error) : 'none') +
+        ', payload=' + (response.payload ? JSON.stringify(response.payload) : 'none')
+      );
       if (!response.result.success) {
+        console.error(
+          'MainViewModel.sendChat: chat.send FAILED, error=' +
+          JSON.stringify(response.error)
+        );
         throw new Error(response.error?.message || this.getLocalizedString('chat_error_send_failed', 'Failed to send chat message.'));
       }
 
       const actualRunId = this.readChatRunIdFromPayload(response.payload);
+      console.info(
+        'MainViewModel.sendChat: chat.send succeeded, actualRunId=' + actualRunId +
+        ', requestedRunId=' + runId
+      );
       if (actualRunId.length > 0 && actualRunId !== runId) {
         this.clearChatPendingRun(runId);
         this.addChatPendingRun(actualRunId);
       }
     }).catch((error: Error) => {
+      console.error(
+        'MainViewModel.sendChat: chat.send catch, error=' + (error instanceof Error ? error.message : String(error))
+      );
       this.clearChatPendingRun(runId);
       this.chatError = error instanceof Error
         ? error.message
