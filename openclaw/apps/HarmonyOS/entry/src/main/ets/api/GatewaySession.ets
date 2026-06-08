@@ -51,7 +51,7 @@ export class InvokeResult {
 }
 
 export class GatewayClientInfo {
-  id: string = 'healthagent-harmonyos';
+  id: string = 'openclaw-harmonyos';
   displayName: string = '';
   version: string = '2026.3.2';
   platform: string = 'harmonyos';
@@ -68,7 +68,7 @@ export class GatewayConnectOptions {
   commands: string[] = [];
   permissions: Record<string, boolean> = {};
   client: GatewayClientInfo = new GatewayClientInfo();
-  userAgent: string = 'HealthAgentHarmony/2026.3.2 (HarmonyOS)';
+  userAgent: string = 'OpenClawHarmony/2026.3.2 (HarmonyOS)';
 }
 
 class SelectedConnectAuth {
@@ -485,18 +485,18 @@ export class GatewaySession {
   private extractServerName(response: GatewayResponse): string {
     const payloadValue = response.payload;
     if (!payloadValue) {
-      return 'HealthAgent';
+      return 'IntentX Agent';
     }
 
     const payload = payloadValue as Record<string, Object | string>;
     const serverValue = payload['server'];
     if (!serverValue || typeof serverValue === 'string') {
-      return 'HealthAgent';
+      return 'IntentX Agent';
     }
 
     const server = serverValue as Record<string, Object | string>;
     const host = server['host'];
-    return typeof host === 'string' && host.trim().length > 0 ? host : 'HealthAgent';
+    return typeof host === 'string' && host.trim().length > 0 ? host : 'IntentX Agent';
   }
 
   private readObject(value: Object | string | undefined): Record<string, Object | string> {
@@ -878,7 +878,7 @@ export class GatewaySession {
       const id: string = String(++this.requestCounter);
       const paramsLength: number = paramsJson ? paramsJson.length : 0;
 
-      console.info('GatewaySession: Sending request ' + id + ': ' + method + ', paramsLength=' + paramsLength);
+      console.info('GatewaySession: Sending request ' + id + ': ' + method + ', paramsLength=' + paramsLength + ', hasAttachments=' + ((paramsJson && paramsJson.indexOf('"attachments"') >= 0) ? 'true' : 'false'));
 
       // Add to request map
       this.requestMap.set(id, { resolve, reject });
@@ -1106,6 +1106,14 @@ export class GatewaySession {
           response.error = data.error;
           const parsedPayload = data.payload !== undefined ? data.payload : this.parsePayloadObject(data.payloadJSON);
           response.payload = parsedPayload as GatewayPayload;
+
+          console.info(
+            'GatewaySession: response id=' + data.id +
+            ', ok=' + data.ok +
+            ', error=' + (data.error ? JSON.stringify(data.error) : 'none') +
+            ', payloadKeys=' + (parsedPayload ? Object.keys(parsedPayload as object).join(',') : 'none')
+          );
+
           handler.resolve(response);
         }
       } else if (frameType === 'event' && data.event) {

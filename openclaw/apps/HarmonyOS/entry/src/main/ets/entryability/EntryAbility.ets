@@ -23,6 +23,9 @@ export default class EntryAbility extends UIAbility {
     AppStorage.setOrCreate<Context>('abilityContext', this.context);
     AppStorage.setOrCreate<number>('localeVersion', 0);
 
+    // 从卡片点击或其他路由参数中提取目标 Tab
+    this.applyTargetTab(want);
+
     // Initialize secure preferences
     securePrefs.init(this.context)
       .then(() => {
@@ -82,11 +85,54 @@ export default class EntryAbility extends UIAbility {
     mainViewModel.refreshLocalizedUiState();
   }
 
+  onNewWant(want: Want, launchParam: AbilityConstant.LaunchParam): void {
+    hilog.info(DOMAIN, TAG, 'onNewWant');
+    this.applyTargetTab(want);
+  }
+
+  onFormEvent(formId: string, message: string): void {
+    hilog.info(DOMAIN, TAG, 'onFormEvent, formId=' + formId + ', message=' + message);
+  }
+
   /**
    * Called when the ability moves to background
    */
   onBackground(): void {
     hilog.info(DOMAIN, TAG, 'onBackground');
+  }
+
+  private applyTargetTab(want: Want): void {
+    // postCardAction 的 params 嵌套在 want.parameters.params 中，是 JSON 字符串
+    const rawParams = want.parameters?.['params'];
+    if (typeof rawParams !== 'string' || rawParams.trim().length === 0) {
+      return;
+    }
+    try {
+      const parsed = JSON.parse(rawParams) as Record<string, string>;
+      const targetPage = (parsed['targetPage'] || '').trim();
+      if (targetPage.length > 0) {
+        const tabIndex = this.mapTargetPageToTab(targetPage);
+        if (tabIndex >= 0) {
+          AppStorage.setOrCreate<number>('pendingActiveTab', tabIndex);
+          hilog.info(DOMAIN, TAG, 'applyTargetTab: ' + targetPage + ' → tab ' + tabIndex);
+        }
+      }
+    } catch (e) {
+      hilog.warn(DOMAIN, TAG, 'applyTargetTab: failed to parse params');
+    }
+  }
+
+  private mapTargetPageToTab(target: string): number {
+    switch (target) {
+      case 'connect':  return 0;
+      case 'chat':     return 1;
+      case 'voice':    return 2;
+      case 'screen':   return 3;
+      case 'settings': return 4;
+      case 'import':   return 5;
+      case 'debug':    return 6;
+      default:         return -1;
+    }
   }
 
   private bumpLocaleVersion(): void {

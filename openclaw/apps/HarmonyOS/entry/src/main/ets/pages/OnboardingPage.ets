@@ -29,9 +29,9 @@ export struct OnboardingPage {
   @State setupCode: string = '';
   @State gatewayToken: string = '';
   @State gatewayPassword: string = '';
-  @State inputMode: string = 'SetupCode';
-  @State advancedOpen: boolean = false;
-  @State manualHost: string = '10.0.2.2';
+  @State inputMode: string = 'Manual';
+  @State advancedOpen: boolean = true;
+  @State manualHost: string = '127.0.0.1';
   @State manualPort: string = '18789';
   @State manualTls: boolean = false;
   @State gatewayError: string = '';
@@ -58,7 +58,7 @@ export struct OnboardingPage {
   private connectionStateListenerId: number = -1;
 
   aboutToAppear(): void {
-    this.manualHost = this.viewModel.manualHost || '';
+    this.manualHost = this.viewModel.manualHost || '127.0.0.1';
     this.manualPort = this.viewModel.manualPort > 0 ? this.viewModel.manualPort.toString() : '18789';
     this.manualTls = this.viewModel.manualTls;
     this.gatewayToken = this.viewModel.gatewayToken || '';
@@ -143,7 +143,7 @@ export struct OnboardingPage {
           .fontColor(C_ACCENT)
           .letterSpacing(1.5);
 
-        Text(this.localizedText('onboarding_title', 'OpenClaw\nMobile Setup'))
+        Text(this.localizedText('onboarding_title', 'IntentX Agent\nMobile Setup'))
           .fontSize(34)
           .fontWeight(FontWeight.Bold)
           .fontColor(C_TEXT)
@@ -261,11 +261,11 @@ export struct OnboardingPage {
       .alignItems(VerticalAlign.Top);
 
       Row() {
-        this.ModeChip(this.localizedText('onboarding_mode_setup_code', 'Setup Code'), this.inputMode === 'SetupCode', () => {
+        this.ModeChip(this.localizedText('onboarding_mode_setup_code', 'Setup Code'), 'SetupCode', () => {
           this.inputMode = 'SetupCode';
           this.gatewayError = '';
         });
-        this.ModeChip(this.localizedText('onboarding_mode_manual', 'Manual'), this.inputMode === 'Manual', () => {
+        this.ModeChip(this.localizedText('onboarding_mode_manual', 'Manual'), 'Manual', () => {
           this.inputMode = 'Manual';
           this.gatewayError = '';
         });
@@ -322,7 +322,7 @@ export struct OnboardingPage {
           .fontWeight(FontWeight.Medium)
           .fontColor(C_TEXT_SEC)
           .letterSpacing(0.9);
-        TextInput({ placeholder: '10.0.2.2', text: this.manualHost })
+        TextInput({ placeholder: '127.0.0.1', text: this.manualHost })
           .width('100%')
           .height(50)
           .backgroundColor(C_SURFACE)
@@ -444,7 +444,7 @@ export struct OnboardingPage {
       }
 
       if (this.resolvedGatewayDisplay().length > 0) {
-        this.ResolvedEndpoint(this.resolvedGatewayDisplay());
+        this.ResolvedEndpoint();
       }
 
       if (this.gatewayError.length > 0) {
@@ -724,14 +724,17 @@ export struct OnboardingPage {
     .padding({ bottom: 8 });
   }
 
-  @Builder ModeChip(label: string, active: boolean, onClick: () => void) {
+  @Builder ModeChip(label: string, mode: string, onClick: () => void) {
     Button({ type: ButtonType.Normal }) {
-      Text(label).fontSize(13).fontWeight(FontWeight.Bold).fontColor(active ? '#FFFFFF' : C_TEXT);
+      Text(label)
+        .fontSize(13)
+        .fontWeight(FontWeight.Bold)
+        .fontColor(this.inputMode === mode ? '#FFFFFF' : C_TEXT);
     }
     .height(40)
     .borderRadius(12)
-    .backgroundColor(active ? C_ACCENT : C_SURFACE)
-    .border({ width: 1, color: active ? '#184DAF' : C_BORDER_STRONG })
+    .backgroundColor(this.inputMode === mode ? C_ACCENT : C_SURFACE)
+    .border({ width: 1, color: this.inputMode === mode ? '#184DAF' : C_BORDER_STRONG })
     .padding({ left: 16, right: 16 })
     .margin({ right: 8 })
     .onClick(() => {
@@ -753,7 +756,7 @@ export struct OnboardingPage {
     });
   }
 
-  @Builder ResolvedEndpoint(endpoint: string) {
+  @Builder ResolvedEndpoint() {
     Column() {
       Divider().color(C_BORDER);
       Text(this.localizedText('onboarding_resolved_endpoint', 'RESOLVED ENDPOINT'))
@@ -762,7 +765,7 @@ export struct OnboardingPage {
         .fontColor(C_TEXT_SEC)
         .letterSpacing(0.7)
         .margin({ top: 8, bottom: 4 });
-      Text(endpoint)
+      Text(this.resolvedGatewayDisplay())
         .fontSize(14)
         .fontWeight(FontWeight.Medium)
         .fontColor(C_TEXT);

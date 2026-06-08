@@ -234,6 +234,15 @@ export struct ChatPage {
 
       Column({ space: 4 }) {
         this.MarkdownMessage(this.messageTextValue(message), message.role === 'user');
+        // 渲染消息中的图片内容块（缩略图）
+        ForEach(this.messageImageUris(message), (uri: string) => {
+          Image(uri)
+            .width('100%')
+            .aspectRatio(1)
+            .objectFit(ImageFit.Cover)
+            .borderRadius(8)
+            .backgroundColor('#F6F7FA');
+        });
       }
       .constraintSize({ minWidth: 0, maxWidth: '80%' })
       .flexShrink(1)
@@ -261,7 +270,7 @@ export struct ChatPage {
       this.MessageAvatar(false);
 
       Column({ space: 4 }) {
-        Text('HealthAgent')
+        Text('IntentX Agent')
           .fontSize(11)
           .fontWeight(FontWeight.Medium)
           .fontColor('#8A92A2');
@@ -748,5 +757,19 @@ export struct ChatPage {
     }
 
     return textParts.join('\n\n');
+  }
+
+  private messageImageUris(message: ChatMessage): string[] {
+    if (!message.content || message.content.length === 0) {
+      return [];
+    }
+    const uris: string[] = [];
+    for (let i = 0; i < message.content.length; i++) {
+      const block = message.content[i];
+      if (block.type === 'image' && (block.imageUri || '').length > 0) {
+        uris.push(block.imageUri as string);
+      }
+    }
+    return uris;
   }
 }

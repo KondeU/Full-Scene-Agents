@@ -1,7 +1,7 @@
 {
   "app": {
-    "bundleName": "ai.openclaw.harmony",
-    "vendor": "health",
+    "bundleName": "ai.openclaw.harmonyos",
+    "vendor": "openclaw",
     "versionCode": 202603010,
     "versionName": "1.0.0",
     "icon": "$media:app_icon",

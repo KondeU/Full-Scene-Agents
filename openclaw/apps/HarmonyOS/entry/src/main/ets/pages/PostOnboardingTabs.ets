@@ -4,6 +4,8 @@ import { ChatPage } from './ChatPage';
 import { VoicePage } from './VoicePage';
 import { ScreenPage } from './ScreenPage';
 import { SettingsPage } from './SettingsPage';
+import { ImportPage } from './ImportPage';
+import { DebugPage } from './DebugPage';
 
 /**
  * Main tabs page shown after onboarding.
@@ -12,6 +14,7 @@ import { SettingsPage } from './SettingsPage';
 export struct PostOnboardingTabs {
   @ObjectLink viewModel: MainViewModel;
   @StorageProp('localeVersion') localeVersion: number = 0;
+  @StorageLink('pendingActiveTab') @Watch('applyPendingTab') pendingActiveTab: number = -1;
 
   @State activeTab: number = 0;
   @State connectedState: boolean = false;
@@ -21,6 +24,7 @@ export struct PostOnboardingTabs {
   private connectionStateListenerId: number = -1;
 
   aboutToAppear(): void {
+    this.applyPendingTab();
     this.syncTabSideEffects();
     this.syncConnectionState();
     this.connectionStateListenerId = this.viewModel.addConnectionStateListener(() => {
@@ -32,6 +36,14 @@ export struct PostOnboardingTabs {
     if (this.connectionStateListenerId >= 0) {
       this.viewModel.removeConnectionStateListener(this.connectionStateListenerId);
       this.connectionStateListenerId = -1;
+    }
+  }
+
+  private applyPendingTab(): void {
+    if (typeof this.pendingActiveTab === 'number' && this.pendingActiveTab >= 0 && this.pendingActiveTab <= 6) {
+      this.activeTab = this.pendingActiveTab;
+      this.syncTabSideEffects();
+      this.pendingActiveTab = -1;
     }
   }
 
@@ -56,8 +68,12 @@ export struct PostOnboardingTabs {
           VoicePage({ viewModel: this.viewModel });
         } else if (this.activeTab === 3) {
           ScreenPage({ viewModel: this.viewModel });
-        } else {
+        } else if (this.activeTab === 4) {
           SettingsPage({ viewModel: this.viewModel });
+        } else if (this.activeTab === 5) {
+          ImportPage({ viewModel: this.viewModel });
+        } else if (this.activeTab === 6) {
+          DebugPage({ viewModel: this.viewModel });
         }
       }
       .width('100%')
@@ -75,7 +91,7 @@ export struct PostOnboardingTabs {
 
   @Builder StatusBar() {
     Row() {
-      Text('HealthAgent')
+      Text('IntentX Agent')
         .fontSize(20)
         .fontWeight(FontWeight.Bold)
         .fontColor('#17181C');
@@ -110,6 +126,8 @@ export struct PostOnboardingTabs {
       this.TabItem(2, this.localizedText('tab_voice', 'Voice'), '🎙️');
       this.TabItem(3, this.localizedText('tab_screen', 'Screen'), '🖥️');
       this.TabItem(4, this.localizedText('tab_settings', 'Settings'), '⚙️');
+      this.TabItem(5, this.localizedText('tab_import', 'Import'), '📥');
+      this.TabItem(6, this.localizedText('tab_debug', 'Debug'), '🔧');
     }
     .width('100%')
     .padding({ left: 10, right: 10, top: 10, bottom: 10 })

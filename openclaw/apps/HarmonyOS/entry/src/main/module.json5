@@ -35,11 +35,13 @@
     ],
     "extensionAbilities": [
       {
-        "name": "HealthAgentFormAbility",
-        "srcEntry": "./ets/widget/GenUIFormAbility.ets",
+        "name": "ReminderFormExtension",
+        "srcEntry": "./ets/form/ReminderFormExtension.ets",
+        "description": "$string:reminder_form_desc",
+        "icon": "$media:icon",
+        "label": "$string:reminder_form_label",
         "type": "form",
-        "label": "$string:widget_display_name",
-        "description": "$string:widget_description",
+        "exported": true,
         "metadata": [
           {
             "name": "ohos.extension.form",
@@ -62,6 +64,36 @@
       {
         "name": "ohos.permission.GET_NETWORK_INFO",
         "reason": "$string:network_state_permission_reason",
+        "usedScene": {
+          "abilities": [
+            "EntryAbility"
+          ],
+          "when": "inuse"
+        }
+      },
+      {
+        "name": "ohos.permission.CAMERA",
+        "reason": "$string:camera_permission_reason",
+        "usedScene": {
+          "abilities": [
+            "EntryAbility"
+          ],
+          "when": "inuse"
+        }
+      },
+      {
+        "name": "ohos.permission.APPROXIMATELY_LOCATION",
+        "reason": "$string:approximate_location_permission_reason",
+        "usedScene": {
+          "abilities": [
+            "EntryAbility"
+          ],
+          "when": "inuse"
+        }
+      },
+      {
+        "name": "ohos.permission.LOCATION",
+        "reason": "$string:location_permission_reason",
         "usedScene": {
           "abilities": [
             "EntryAbility"

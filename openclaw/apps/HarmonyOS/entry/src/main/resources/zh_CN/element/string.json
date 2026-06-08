@@ -2,15 +2,15 @@
   "string": [
     {
       "name": "module_desc",
-      "value": "HealthAgent 移动入口模块"
+      "value": "IntentX Agent 移动入口模块"
     },
     {
       "name": "EntryAbility_desc",
-      "value": "HealthAgent 移动应用程序"
+      "value": "IntentX Agent 移动应用程序"
     },
     {
       "name": "EntryAbility_label",
-      "value": "HealthAgent"
+      "value": "IntentX Agent"
     },
     {
       "name": "internet_permission_reason",
@@ -106,7 +106,7 @@
     },
     {
       "name": "chat_empty_description",
-      "value": "发送一条消息，开始与 HealthAgent 对话。"
+      "value": "发送一条消息，开始与 IntentX Agent 对话。"
     },
     {
       "name": "chat_tools_running",
@@ -391,6 +391,190 @@
     {
       "name": "tab_settings",
       "value": "设置"
+    },
+    {
+      "name": "tab_import",
+      "value": "导入"
+    },
+    {
+      "name": "import_header_eyebrow",
+      "value": "导入"
+    },
+    {
+      "name": "import_header_title",
+      "value": "导入"
+    },
+    {
+      "name": "import_header_subtitle",
+      "value": "拍照或从相册选取照片导入"
+    },
+    {
+      "name": "import_action_camera",
+      "value": "拍照"
+    },
+    {
+      "name": "import_action_album",
+      "value": "相册"
+    },
+    {
+      "name": "import_state_label",
+      "value": "导入状态"
+    },
+    {
+      "name": "import_state_idle",
+      "value": "就绪"
+    },
+    {
+      "name": "import_state_capturing",
+      "value": "拍照中"
+    },
+    {
+      "name": "import_state_picking",
+      "value": "选取中"
+    },
+    {
+      "name": "import_state_success",
+      "value": "照片已获取"
+    },
+    {
+      "name": "import_state_error",
+      "value": "错误"
+    },
+    {
+      "name": "import_reason_idle",
+      "value": "点击拍照拍摄新照片，或点击相册选取已有照片。"
+    },
+    {
+      "name": "import_reason_capturing",
+      "value": "相机已打开。拍一张照片后会自动存入相册。"
+    },
+    {
+      "name": "import_reason_picking",
+      "value": "相册选取器已打开。选择一张照片进行导入。"
+    },
+    {
+      "name": "import_reason_success",
+      "value": "照片已获取并传入 obtainPhotoToProcess 进行后续处理。"
+    },
+    {
+      "name": "import_reason_error",
+      "value": "上一次照片操作失败。请重试或使用其他来源。"
+    },
+    {
+      "name": "import_error_title",
+      "value": "导入错误"
+    },
+    {
+      "name": "import_error_camera",
+      "value": "拍照失败。"
+    },
+    {
+      "name": "import_error_album",
+      "value": "相册选取失败。"
+    },
+    {
+      "name": "import_photo_label",
+      "value": "已选照片"
+    },
+    {
+      "name": "import_photo_uri",
+      "value": "照片 URI"
+    },
+    {
+      "name": "tab_debug",
+      "value": "调试"
+    },
+    {
+      "name": "debug_header_eyebrow",
+      "value": "调试"
+    },
+    {
+      "name": "debug_header_title",
+      "value": "调试"
+    },
+    {
+      "name": "debug_header_subtitle",
+      "value": "测试卡片内容推送、模拟 invoke 命令、查看设备状态。"
+    },
+    {
+      "name": "debug_card_preview_label",
+      "value": "卡片预览"
+    },
+    {
+      "name": "debug_push_label",
+      "value": "推送卡片内容"
+    },
+    {
+      "name": "debug_push_title_placeholder",
+      "value": "标题（可选）"
+    },
+    {
+      "name": "debug_push_body_placeholder",
+      "value": "正文（必填）"
+    },
+    {
+      "name": "debug_push_note_placeholder",
+      "value": "备注（可选）"
+    },
+    {
+      "name": "debug_push_image_placeholder",
+      "value": "图片 URL（可选）"
+    },
+    {
+      "name": "debug_push_button",
+      "value": "推送到卡片"
+    },
+    {
+      "name": "debug_reset_button",
+      "value": "恢复默认"
+    },
+    {
+      "name": "debug_invoke_label",
+      "value": "INVOKE 模拟"
+    },
+    {
+      "name": "debug_invoke_desc",
+      "value": "使用上方表单字段模拟网关 invoke 命令（card.reminder.update）。"
+    },
+    {
+      "name": "debug_invoke_button",
+      "value": "模拟 Invoke"
+    },
+    {
+      "name": "debug_state_label",
+      "value": "卡片状态"
+    },
+    {
+      "name": "debug_state_title",
+      "value": "标题"
+    },
+    {
+      "name": "debug_state_body",
+      "value": "正文"
+    },
+    {
+      "name": "debug_state_note",
+      "value": "备注"
+    },
+    {
+      "name": "debug_state_image",
+      "value": "图片 URL"
+    },
+    {
+      "name": "debug_result_label",
+      "value": "推送结果"
+    },
+    {
+      "name": "reminder_form_desc",
+      "value": "主动提醒卡片"
+    },
+    {
+      "name": "reminder_form_label",
+      "value": "主动提醒"
+    },
+    {
+      "name": "reminder_form_display_name",
+      "value": "提醒"
     },
     {
       "name": "voice_header_eyebrow",
@@ -742,7 +926,7 @@
     },
     {
       "name": "settings_product_name",
-      "value": "HealthAgent HarmonyOS 移动版"
+      "value": "IntentX Agent HarmonyOS 移动版"
     },
     {
       "name": "settings_connection",
@@ -810,7 +994,7 @@
     },
     {
       "name": "onboarding_title",
-      "value": "HealthAgent\n移动端设置"
+      "value": "IntentX Agent\n移动端设置"
     },
     {
       "name": "onboarding_step_counter",
@@ -878,7 +1062,7 @@
     },
     {
       "name": "onboarding_setup_code_placeholder",
-      "value": "粘贴 healthagent qr --setup-code-only 生成的设置码"
+      "value": "粘贴 openclaw qr --setup-code-only 生成的设置码"
     },
     {
       "name": "onboarding_quickfill_emulator",
@@ -1114,7 +1298,7 @@
     },
     {
       "name": "widget_display_name",
-      "value": "HealthAgent 卡片"
+      "value": "IntentX Agent 卡片"
     },
     {
       "name": "widget_description",

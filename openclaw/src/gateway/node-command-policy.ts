@@ -42,6 +42,8 @@ const CALL_LOG_COMMANDS = ["callLog.search"];
 const REMINDERS_COMMANDS = ["reminders.list"];
 const REMINDERS_DANGEROUS_COMMANDS = ["reminders.add"];
 
+const CARD_COMMANDS = ["card.reminder.update"];
+
 const PHOTOS_COMMANDS = ["photos.latest"];
 
 const MOTION_COMMANDS = ["motion.activity", "motion.pedometer"];
@@ -60,6 +62,7 @@ const UNKNOWN_PLATFORM_COMMANDS = [
   ...CANVAS_COMMANDS,
   ...CAMERA_COMMANDS,
   ...LOCATION_COMMANDS,
+  ...CARD_COMMANDS,
   NODE_SYSTEM_NOTIFY_COMMAND,
 ];
 

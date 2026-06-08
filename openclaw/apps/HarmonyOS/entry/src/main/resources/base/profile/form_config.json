@@ -1,32 +1,24 @@
 {
   "forms": [
     {
-      "name": "HealthAgentWidget",
-      "displayName": "$string:widget_display_name",
-      "description": "$string:widget_description",
-      "src": "./ets/widget/pages/HealthAgentWidget.ets",
+      "name": "ReminderCard",
+      "displayName": "$string:reminder_form_display_name",
+      "description": "$string:reminder_form_desc",
+      "src": "./ets/widget/pages/ReminderCardWidget.ets",
       "uiSyntax": "arkts",
       "window": {
-        "autoDesignWidth": true,
-        "designWidth": 720
+        "designWidth": 720,
+        "autoDesignWidth": true
       },
       "colorMode": "auto",
       "isDefault": true,
+      "isDynamic": true,
       "updateEnabled": true,
-      "scheduledUpdateTime": "10:30",
       "updateDuration": 1,
       "defaultDimension": "2*4",
       "supportDimensions": [
-        "2*2",
         "2*4",
-        "4*4"
-      ],
-      "formConfigAbility": "ability://com.example.myapplication.FormConfigAbility",
-      "metadata": [
-        {
-          "name": "ohos.extension.form",
-          "resource": "$profile:form_config"
-        }
+        "2*2"
       ]
     }
   ]
