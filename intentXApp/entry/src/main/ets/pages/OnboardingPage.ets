@@ -253,6 +253,7 @@ export struct OnboardingPage {
   @Builder GatewayStep() {
     Column({ space: 12 }) {
       this.SectionHeader(this.localizedText('onboarding_gateway_header', 'Gateway Connection'));
+      this.GatewayModeSelector();
 
       if (this.gatewayMode === GatewayMode.OpenClaw) {
         Row() {
@@ -783,6 +784,41 @@ export struct OnboardingPage {
     });
   }
 
+  @Builder GatewayModeSelector() {
+    Column({ space: 8 }) {
+      Text(this.localizedText('connect_gateway_type', 'Gateway type'))
+        .fontSize(11)
+        .fontWeight(FontWeight.Medium)
+        .fontColor(C_TEXT_SEC)
+        .letterSpacing(0.9);
+
+      Row() {
+        this.GatewayModeChip(this.localizedText('connect_gateway_type_hermes', 'Hermes'), GatewayMode.Hermes);
+        this.GatewayModeChip(this.localizedText('connect_gateway_type_openclaw', 'OpenClaw'), GatewayMode.OpenClaw);
+      }
+      .width('100%');
+    }
+    .width('100%');
+  }
+
+  @Builder GatewayModeChip(label: string, mode: string) {
+    Button({ type: ButtonType.Normal }) {
+      Text(label)
+        .fontSize(13)
+        .fontWeight(FontWeight.Bold)
+        .fontColor(this.gatewayMode === mode ? '#FFFFFF' : C_TEXT);
+    }
+    .height(40)
+    .borderRadius(12)
+    .backgroundColor(this.gatewayMode === mode ? C_ACCENT : C_SURFACE)
+    .border({ width: 1, color: this.gatewayMode === mode ? '#184DAF' : C_BORDER_STRONG })
+    .padding({ left: 16, right: 16 })
+    .margin({ right: 8 })
+    .onClick(() => {
+      this.switchGatewayMode(mode);
+    });
+  }
+
   @Builder QuickFillChip(label: string, onClick: () => void) {
     Button({ type: ButtonType.Normal }) {
       Text(label).fontSize(12).fontWeight(FontWeight.Bold).fontColor(C_ACCENT);
@@ -856,6 +892,43 @@ export struct OnboardingPage {
     }
     this.gatewayError = '';
     this.currentStep = 3;
+  }
+
+  private switchGatewayMode(mode: string): void {
+    const nextMode = mode === GatewayMode.OpenClaw ? GatewayMode.OpenClaw : GatewayMode.Hermes;
+    if (this.gatewayMode === nextMode) {
+      return;
+    }
+
+    this.gatewayMode = nextMode;
+    this.gatewayError = '';
+    this.attemptedConnect = false;
+    this.isConnecting = false;
+    void this.viewModel.setGatewayMode(nextMode);
+
+    if (nextMode === GatewayMode.Hermes) {
+      this.inputMode = 'Manual';
+      this.advancedOpen = true;
+      this.manualHost = this.viewModel.hermesHost || '';
+      this.manualPort = this.viewModel.hermesPort > 0 ? this.viewModel.hermesPort.toString() : '';
+      this.manualTls = this.viewModel.hermesTls;
+      this.gatewayToken = this.viewModel.hermesApiToken || '';
+      this.gatewayPassword = this.viewModel.gatewayPassword || '';
+      return;
+    }
+
+    this.manualHost = this.viewModel.manualHost || '10.0.2.2';
+    this.manualPort = this.viewModel.manualPort > 0 ? this.viewModel.manualPort.toString() : '18789';
+    this.manualTls = this.viewModel.manualTls;
+    this.gatewayToken = this.viewModel.gatewayToken || '';
+    this.gatewayPassword = this.viewModel.gatewayPassword || '';
+    this.advancedOpen = false;
+    this.inputMode = (
+      this.viewModel.manualEnabled ||
+      this.viewModel.manualHost.trim().length > 0 ||
+      this.viewModel.gatewayToken.trim().length > 0 ||
+      this.viewModel.gatewayPassword.trim().length > 0
+    ) ? 'Manual' : 'SetupCode';
   }
 
   private handlePermissionsNext(): void {
