@@ -498,7 +498,7 @@
     },
     {
       "name": "import_reason_success",
-      "value": "照片已获取并传入 obtainPhotoToProcess 进行后续处理。"
+      "value": "图片数据已导入，可访问聊天页面的ImportImage会话查看更多解析详情。"
     },
     {
       "name": "import_reason_error",
@@ -619,6 +619,10 @@
     {
       "name": "reminder_form_display_name",
       "value": "提醒"
+    },
+    {
+      "name": "share_extension_label",
+      "value": "IntentX Agent"
     },
     {
       "name": "voice_header_eyebrow",

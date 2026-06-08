@@ -1,6 +1,7 @@
 import { GatewaySession, GatewayConnectOptions, GatewaySessionLike } from '../api/GatewaySession';
 import { HermesGatewaySession, UnavailableGatewaySession } from '../api/HermesGatewaySession';
 import { deviceAuthStore } from '../api/DeviceAuthStore';
+import { fileIo } from '@kit.CoreFileKit';
 import { deviceIdentityStore } from '../api/DeviceIdentityStore';
 import { securePrefs, LocationMode, GatewayMode, HERMES_DEFAULT_HOST, HERMES_DEFAULT_PORT } from '../common/SecurePrefs';
 import { HarmonyNodeRuntimeFlags, InvokeCommandRegistry } from '../node/InvokeCommandRegistry';
@@ -448,6 +449,9 @@ export class MainViewModel {
     this.chatMessages = [];
     this.notifyChatStateChanged();
 
+    // 将连接端点写入文件，供 ShareReceiveExtension 等扩展能力读取
+    this.persistEndpointToFile(this.connectedEndpoint);
+
     if (this.chatSessions.findIndex((entry: ChatSessionEntry) => entry.key === mainSessionKey) === -1) {
       const session = new ChatSessionEntry();
       session.key = mainSessionKey;
@@ -467,10 +471,50 @@ export class MainViewModel {
     this.remoteAddress = null;
     this.statusText = this.isNodeConnected ? 'Connected (operator offline)' : message;
     this.chatStreamingAssistantText = null;
+    // 清除共享的连接端点文件
+    this.persistEndpointToFile(null);
     this.chatPendingToolCalls = [];
     this.clearChatPendingRuns();
     this.notifyChatStateChanged();
     this.notifyConnectionStateChanged();
+  }
+
+  /**
+   * 将网关端点信息持久化到文件，供同一 app 内其他上下文（如 ShareExtension）读取。
+   * @param endpoint 要保存的端点，传 null 清除文件
+   */
+  private persistEndpointToFile(endpoint: GatewayEndpoint | null): void {
+    try {
+      const ctx = AppStorage.get<Context>('abilityContext');
+      if (!ctx) {
+        console.warn('MainViewModel: cannot persist endpoint, no abilityContext');
+        return;
+      }
+      const filePath = ctx.filesDir + '/gateway_endpoint.json';
+      if (endpoint === null) {
+        // 删除文件（文件不存在时忽略错误）
+        try {
+          fileIo.unlinkSync(filePath);
+        } catch (_e) {
+          // 文件可能不存在，忽略
+        }
+        return;
+      }
+      const json = JSON.stringify({
+        host: endpoint.host,
+        port: endpoint.port,
+        tlsEnabled: endpoint.tlsEnabled,
+        stableId: endpoint.stableId
+      });
+      const file = fileIo.openSync(filePath, fileIo.OpenMode.CREATE | fileIo.OpenMode.TRUNC | fileIo.OpenMode.WRITE_ONLY);
+      try {
+        fileIo.writeSync(file.fd, json);
+      } finally {
+        fileIo.closeSync(file);
+      }
+    } catch (err) {
+      console.warn('MainViewModel: persistEndpointToFile failed: ' + (err as Error).message);
+    }
   }
 
   private handleNodeConnected(): void {
@@ -1708,7 +1752,7 @@ export class MainViewModel {
     }
   }
 
-  sendChat(message: string, thinking: string, attachments: OutgoingAttachment[], displayMessage?: string): void {
+  sendChat(message: string, thinking: string, attachments: OutgoingAttachment[], displayMessage?: string, sessionKey?: string): void {
     const trimmedMessage = message.trim();
     if (trimmedMessage.length === 0 && attachments.length === 0) {
       return;
@@ -1748,7 +1792,7 @@ export class MainViewModel {
     this.addChatPendingRun(runId);
 
     const requestParams = new ChatSendRequestParams();
-    requestParams.sessionKey = this.chatSessionKey;
+    requestParams.sessionKey = sessionKey ?? this.chatSessionKey;
     requestParams.message = outgoingText;
     requestParams.thinking = this.chatThinkingLevel;
     requestParams.idempotencyKey = runId;

@@ -7,17 +7,21 @@ import { BusinessError } from '@kit.BasicServicesKit';
 import { mainViewModel } from '../viewmodel/MainViewModel';
 import { OutgoingAttachment } from '../model/GatewayModels';
 
-/** 客户端侧文件大小上限（解码后），与服务端 5MB 限制对齐。 */
-const MAX_FILE_SIZE_BYTES: number = 5 * 1024 * 1024;
+/** 客户端侧安全上限（原始文件大小），超过拒绝以防止 OOM。 */
+const MAX_FILE_SIZE_BYTES: number = 20 * 1024 * 1024;
+/** 服务端硬限制（解码后大小），客户端应通过压缩确保低于此值。 */
+const SERVER_MAX_SIZE_BYTES: number = 5 * 1024 * 1024;
 /**
  * 服务端 parseMessageWithAttachments 的 offload 阈值为 2MB 解码后文件大小。
- * 图片压缩目标：原始文件 ≤ 1.5MB，保留足够余量确保内联传输，避免 offload。
+ * 图片压缩目标：压缩后 JPEG ≤ 1.5MB，保留足够余量确保内联传输，避免 offload。
  */
 const MAX_INLINE_BYTES: number = 1.5 * 1024 * 1024;
 /** 压缩时 JPEG 质量 (0-100)，取值越高文件越大画质越好 */
 const JPEG_QUALITY: number = 80;
-/** 压缩时长边最大像素数，保持合理画质同时控制文件大小 */
-const MAX_DIMENSION: number = 1920;
+/** 迭代压缩时初始长边最大像素数 */
+const INITIAL_MAX_DIMENSION: number = 1920;
+/** 迭代压缩时最小边长兜底，防止无限循环 */
+const MIN_DIMENSION: number = 256;
 
 export class PhotoResult {
   uri: string = '';
@@ -116,12 +120,20 @@ export class PhotoCaptureService {
         // P0-02: 前置校验文件大小
         if (stat.size <= 0) {
           console.error('PhotoCaptureService: file is empty, uri=' + photoResult.uri);
+          AppStorage.setOrCreate<string>('shareReceiveStatus', 'fail');
+          AppStorage.setOrCreate<string>('shareReceiveError', 'Image file is empty.');
           return;
         }
-        // P1-01: 客户端侧大小上限，防止 OOM
+        // P1-01: 安全上限检查，防止 OOM（仅拒绝 > 20MB 的极端文件）
         if (stat.size > MAX_FILE_SIZE_BYTES) {
           console.error(
-            'PhotoCaptureService: file too large (' + stat.size + ' bytes), max=' + MAX_FILE_SIZE_BYTES
+            'PhotoCaptureService: file too large for safety (' + stat.size + ' bytes), max=' + MAX_FILE_SIZE_BYTES
+          );
+          AppStorage.setOrCreate<string>('shareReceiveStatus', 'fail');
+          AppStorage.setOrCreate<string>(
+            'shareReceiveError',
+            'Image is too large (' + Math.round(stat.size / 1048576) +
+            ' MB). Maximum is 20 MB.'
           );
           return;
         }
@@ -129,9 +141,23 @@ export class PhotoCaptureService {
         let buffer = new ArrayBuffer(stat.size);
         fileIo.readSync(file.fd, buffer);
 
-        // 图片压缩：确保解码后文件 ≤ 1.5MB，低于服务端 2MB offload 阈值
-        let finalBuffer = await this.compressImageIfNeeded(buffer);
+        // 迭代压缩：反复将宽高减半，直到压缩后 JPEG ≤ 1.5MB
+        let finalBuffer = await this.compressToTarget(buffer, MAX_INLINE_BYTES);
         let wasCompressed = finalBuffer !== buffer;
+
+        // 压缩后仍超 5MB（服务端硬限制），拒绝发送
+        if (finalBuffer.byteLength > SERVER_MAX_SIZE_BYTES) {
+          console.error(
+            'PhotoCaptureService: compressed file still too large (' + finalBuffer.byteLength +
+            ' bytes), cannot send'
+          );
+          AppStorage.setOrCreate<string>('shareReceiveStatus', 'fail');
+          AppStorage.setOrCreate<string>(
+            'shareReceiveError',
+            'Image could not be compressed enough. Please try a smaller image.'
+          );
+          return;
+        }
 
         // 使用系统 Base64Helper 编码
         let base64 = await this.base64Helper.encodeToString(new Uint8Array(finalBuffer));
@@ -148,8 +174,34 @@ export class PhotoCaptureService {
         attachment.content = base64;
 
         // 发送到专用的 ImportImage 会话，避免主对话被心跳刷屏
-        mainViewModel.sendChat('/ImageData', 'off', [attachment], 'ImportImage');
-        console.info('PhotoCaptureService: photo sent to ImportImage session');
+        const SHARE_TAG = '[Share2Agent]';
+        console.info(
+          SHARE_TAG + ' about to sendChat: isConnected=' + mainViewModel.isConnected +
+          ', chatSessionKey=' + mainViewModel.chatSessionKey +
+          ', prevError=' + (mainViewModel.chatError || '(none)')
+        );
+        const prevError = mainViewModel.chatError;
+        // sessionKey='ImportImage' — 发到专用会话，避免主对话被心跳刷屏
+        mainViewModel.sendChat('/ImageData', 'off', [attachment], undefined, 'ImportImage');
+        // sendChat 内部若检测到 isConnected==false，会设置 chatError 并 return
+        const sendFailed = (mainViewModel.chatError !== null && mainViewModel.chatError !== prevError);
+        if (sendFailed) {
+          AppStorage.setOrCreate<string>('shareReceiveStatus', 'fail');
+          AppStorage.setOrCreate<string>(
+            'shareReceiveError',
+            'Not connected to Gateway. Please open IntentX App, go to Connect tab, and ensure it is connected before sharing.'
+          );
+          console.warn(
+            SHARE_TAG + ' sendChat FAILED: isConnected=' + mainViewModel.isConnected +
+            ', chatError=' + mainViewModel.chatError
+          );
+        } else {
+          AppStorage.setOrCreate<string>('shareReceiveStatus', 'success');
+        }
+        console.info(
+          SHARE_TAG + ' done: finalSize=' + finalBuffer.byteLength +
+          ' bytes, wasCompressed=' + wasCompressed + ', sendOk=' + !sendFailed
+        );
       } finally {
         // P0-01: 无论 read/encode 是否异常，fd 必须关闭
         fileIo.closeSync(file);
@@ -160,66 +212,114 @@ export class PhotoCaptureService {
         'PhotoCaptureService: obtainPhotoToProcess error, code=' + bizErr.code +
         ', msg=' + bizErr.message
       );
+      AppStorage.setOrCreate<string>('shareReceiveStatus', 'fail');
+      AppStorage.setOrCreate<string>(
+        'shareReceiveError',
+        'Failed to process image: ' + (bizErr.message || 'Unknown error.')
+      );
     }
   }
 
   /**
-   * 若图片原始文件超过 INLINE 阈值，则缩放并重新编码为 JPEG。
-   * GIF 跳过压缩（保留动画帧），其余格式统一输出 JPEG。
+   * 从外部 URI 处理图片（系统分享等入口）。
+   * 构造 PhotoResult 后委托给 obtainPhotoToProcess 完成后续管线。
    *
-   * @returns 压缩后的 ArrayBuffer（可能等于原始 buffer）
+   * @param uri 图片文件 URI
    */
-  private async compressImageIfNeeded(buffer: ArrayBuffer): Promise<ArrayBuffer> {
-    if (buffer.byteLength <= MAX_INLINE_BYTES) {
+  processSharedUri(uri: string): void {
+    const photoResult = new PhotoResult();
+    photoResult.uri = uri;
+    photoResult.displayName = this.extractDisplayName(uri);
+    this.obtainPhotoToProcess(photoResult);
+  }
+
+  /**
+   * 迭代压缩图片到目标文件大小。
+   * 策略：反复将宽高各减半，直到 JPEG 编码后 ≤ targetBytes。
+   * 最大迭代从 INITIAL_MAX_DIMENSION 开始，最细到 MIN_DIMENSION 兜底。
+   *
+   * @param buffer 原始图片字节
+   * @param targetBytes 目标最大字节数
+   * @returns 压缩后的 ArrayBuffer（如果原图已足够小则返回原 buffer）
+   */
+  private async compressToTarget(buffer: ArrayBuffer, targetBytes: number): Promise<ArrayBuffer> {
+    if (buffer.byteLength <= targetBytes) {
       return buffer;
     }
 
     console.info(
-      'PhotoCaptureService: compressing image, original=' + buffer.byteLength +
-      ' bytes, target≤' + MAX_INLINE_BYTES
+      'PhotoCaptureService: compressToTarget start, original=' + buffer.byteLength +
+      ' bytes, target≤' + targetBytes
     );
 
+    let source: image.ImageSource | null = null;
     try {
-      let source = image.createImageSource(buffer);
+      source = image.createImageSource(buffer);
       let info = await source.getImageInfo(0);
-      let originalWidth = info.size.width;
-      let originalHeight = info.size.height;
+      let ow = info.size.width;
+      let oh = info.size.height;
 
-      // 等比缩放到长边不超过 MAX_DIMENSION
-      let targetWidth = originalWidth;
-      let targetHeight = originalHeight;
-      if (originalWidth > MAX_DIMENSION || originalHeight > MAX_DIMENSION) {
-        let scale = MAX_DIMENSION / Math.max(originalWidth, originalHeight);
-        targetWidth = Math.round(originalWidth * scale);
-        targetHeight = Math.round(originalHeight * scale);
+      // 初始缩放比例：让长边不超过 INITIAL_MAX_DIMENSION
+      let scale = Math.min(1.0, INITIAL_MAX_DIMENSION / Math.max(ow, oh));
+      let iteration = 0;
+
+      while (iteration < 10) {  // 安全上限，最多 10 轮
+        let tw = Math.max(1, Math.floor(ow * scale));
+        let th = Math.max(1, Math.floor(oh * scale));
+
+        console.info(
+          'PhotoCaptureService: compressToTarget iteration ' + iteration +
+          ', scale=' + Number(scale).toFixed(3) + ', target=' + tw + 'x' + th
+        );
+
+        let decodeOptions: image.DecodingOptions = {
+          desiredSize: { width: tw, height: th }
+        };
+        let pixelMap = await source.createPixelMap(decodeOptions);
+
+        let packer = image.createImagePacker();
+        let packOptions: image.PackingOption = {
+          format: 'image/jpeg',
+          quality: JPEG_QUALITY
+        };
+        let compressed = await packer.packing(pixelMap, packOptions);
+        pixelMap.release();
+
+        if (compressed.byteLength <= targetBytes) {
+          console.info(
+            'PhotoCaptureService: compressToTarget success, ' + buffer.byteLength +
+            '→' + compressed.byteLength + ' bytes (' + tw + 'x' + th + ') in ' + iteration + ' iteration(s)'
+          );
+          return compressed;
+        }
+
+        // 兜底：不再继续缩小
+        if (Math.min(tw, th) <= MIN_DIMENSION) {
+          console.info(
+            'PhotoCaptureService: compressToTarget floor hit (' + tw + 'x' + th +
+            '), returning best-effort ' + compressed.byteLength + ' bytes'
+          );
+          return compressed;
+        }
+
+        // 长宽各减半，面积约 1/4
+        scale = scale / 2;
+        iteration++;
       }
 
-      let decodeOptions: image.DecodingOptions = {
-        desiredSize: { width: targetWidth, height: targetHeight }
-      };
-      let pixelMap = await source.createPixelMap(decodeOptions);
-
-      let packer = image.createImagePacker();
-      let packOptions: image.PackingOption = {
-        format: 'image/jpeg',
-        quality: JPEG_QUALITY
-      };
-      let compressed = await packer.packing(pixelMap, packOptions);
-
-      pixelMap.release();
-      source.release();
-
-      console.info(
-        'PhotoCaptureService: compressed ' + buffer.byteLength + '→' +
-        compressed.byteLength + ' bytes (' + targetWidth + 'x' + targetHeight + ')'
-      );
-      return buffer.byteLength <= compressed.byteLength ? buffer : compressed;
+      // 不应到达此处（有 MIN_DIMENSION 兜底），但保留保底返回
+      console.warn('PhotoCaptureService: compressToTarget max iterations reached');
+      return buffer;
     } catch (error) {
       console.warn(
-        'PhotoCaptureService: compression failed, using original buffer: ' +
+        'PhotoCaptureService: compressToTarget failed, using original buffer: ' +
         (error as Error).message
       );
       return buffer;
+    } finally {
+      if (source !== null) {
+        source.release();
+      }
     }
   }
 

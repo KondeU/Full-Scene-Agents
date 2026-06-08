@@ -48,6 +48,26 @@
             "resource": "$profile:form_config"
           }
         ]
+      },
+      {
+        "name": "ShareReceiveExtensionAbility",
+        "srcEntry": "./ets/share/ShareReceiveExtensionAbility.ets",
+        "type": "share",
+        "exported": true,
+        "icon": "$media:icon",
+        "label": "$string:share_extension_label",
+        "skills": [
+          {
+            "actions": ["ohos.want.action.sendData"],
+            "uris": [
+              {
+                "scheme": "file",
+                "utd": "general.image",
+                "maxFileSupported": 1
+              }
+            ]
+          }
+        ]
       }
     ],
     "requestPermissions": [

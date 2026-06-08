@@ -621,6 +621,10 @@
       "value": "Reminder"
     },
     {
+      "name": "share_extension_label",
+      "value": "IntentX Agent"
+    },
+    {
       "name": "voice_header_eyebrow",
       "value": "VOICE"
     },

@@ -347,10 +347,88 @@ chat.ts: "chat.send" handler
 |------|---|------|
 | 服务端 offload 阈值 | 2 MB（解码后） | 超过则存盘为 `media://inbound/<id>`，Agent 收到的消息会追加 `[media attached: ...]` 标记 |
 | 服务端硬限制 | 5 MB | 超过直接报错 4xx |
-| 客户端上限 | 5 MB（原始文件） | 超过拒绝，日志报错 |
-| **客户端压缩阈值** | **1.5 MB（原始文件）** | **超过即缩放至长边 ≤1920px + JPEG quality=80 重编码，确保解码后 < 2MB 内联传输** |
+| 客户端安全上限 | 20 MB（原始文件） | 超过拒绝，防止 OOM |
+| **客户端压缩目标** | **≤ 1.5 MB（压缩后 JPEG）** | **迭代缩小至达标，确保 base64 解码后 < 2MB 内联传输** |
 
-实测数据：原始 3.5MB base64（解码 ~2.65MB）→ 触发 offload，Agent 只看到文本标记，收不到图片。压缩后 1.7MB base64（解码 ~1.3MB）→ 正常内联传输。
+### 7.1.1 迭代压缩算法
+
+对于原始文件 > 1.5MB 的图片，采用**迭代缩放**策略：
+
+```
+1. 读取原始文件 → buffer
+2. 若 buffer ≤ 1.5MB → 直接使用，不做压缩
+3. 创建 ImageSource，获取原始宽高 (ow, oh)
+4. 初始 scale = min(1.0, 1920 / max(ow, oh))  // 首次尝试最长边 1920px
+5. LOOP:
+   a. targetW = floor(ow × scale), targetH = floor(oh × scale)
+   b. 用 desiredSize 解码为 PixelMap
+   c. JPEG q=80 编码 → compressedBuffer
+   d. 若 compressedBuffer ≤ 1.5MB → 返回 compressedBuffer ✓
+   e. 若 min(targetW, targetH) < 256px → 返回 compressedBuffer（兜底，不再缩小）
+   f. scale = scale / 2  // 长宽各减半，面积约 1/4
+   g. 继续 LOOP
+```
+
+**关键特性**：
+- 不预设固定的最大尺寸，而是用大小反馈驱动迭代
+- 每次迭代面积约缩小 4 倍，对大图收敛很快（如 6000×4000 → 1920×1280 → 960×640 → 480×320）
+- 256px 最小边长兜底，防止无限循环
+- 每轮都从原始 ImageSource 解码，避免累积质量损失；上一轮的 PixelMap 立即释放
+
+实测数据：原始 3.5MB base64（解码 ~2.65MB）→ 触发 offload，Agent 只看到文本标记，收不到图片。压缩后 1.7MB base64（解码 ~1.3MB）→ 正常内联传输。11MB 照片（6000×4000 HEIC 转 JPEG）→ 两轮迭代（1920×1280 → 960×640）～800KB → 正常内联传输。8K 照片（7680×4320，~18MB）→ 1 轮迭代（1920×1080）～500KB → 正常内联传输。
+
+### 7.1.2 阈值溯源分析
+
+本节记录各阈值的来源与推导依据，供后续维护参考。
+
+**完整阈值链路（从服务端到客户端）**：
+
+```
+服务端 (chat-attachments.ts)
+  OFFLOAD_THRESHOLD_BYTES = 2_000_000   ← 第 84 行，file-private
+    │ 超过 → saveMediaBuffer 存盘 → Agent 收到 [media attached: media://inbound/<id>]
+    │ 不超过 → ChatImageContent { type:"image", data, mimeType } 内联传给 Agent
+    │
+  maxBytes 默认值 = 5_000_000            ← 第 300 行，函数参数默认值
+    │ 所有 3 个调用点 (chat.ts / agent.ts / server-node-events.ts) 均显式传入 maxBytes: 5_000_000
+    │ 超过 → throw Error "exceeds size limit"，消息发送失败
+    │
+  MEDIA_MAX_BYTES = 5 * 1024 * 1024     ← store.ts 第 16 行
+    │ saveMediaBuffer 在写入磁盘前做防御性二次校验
+    │ 正常路径已在 parseMessageWithAttachments 中被 5MB 拦截，此检查为兜底
+
+客户端 (PhotoCaptureService.ets)
+  MAX_INLINE_BYTES = 1.5 * 1024 * 1024   ← 压缩目标
+    │ = 2_000_000 × 0.75，预留 25% 安全余量
+    │ 余量作用：覆盖 JPEG q=80 在同尺寸不同图像复杂度下的文件大小波动
+    │          高噪点/复杂纹理的 JPEG 可能比简单场景大 2~3 倍
+    │
+  SERVER_MAX_SIZE_BYTES = 5 * 1024 * 1024 ← 服务端硬限制镜像
+    │ 压缩后做最终校验，理论上不会被触发（256px 兜底远低于 5MB）
+    │ 防御性编程：防止压缩逻辑异常导致大文件穿透
+    │
+  MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024 ← 读取安全上限
+    │ 纯防 OOM：拒绝 absurdly large 的源文件
+    │ 20MB 足以覆盖所有正常手机照片（含 HEIC 原片）
+```
+
+**为什么 `MAX_INLINE_BYTES` 直接等同于服务端 decoded size？**
+
+客户端发送链路：`JPEG binary → util.Base64Helper.encodeToString → base64 string → WebSocket JSON`
+
+服务端接收链路：`JSON parse → base64 string → Buffer.from(base64, 'base64') → binary (解码后)`
+
+base64 编码/解码是**无损且尺寸精确可逆**的：`base64_len = ceil(binary_len × 4/3)`，`decode(base64) == binary`。
+
+因此：**`finalBuffer.byteLength`（客户端 JPEG 二进制字节数）=== 服务端 `Buffer.from(base64, 'base64').length`**。1.5MB 的 JPEG 在服务端解码后就是 1.5MB，直接可比。
+
+**为什么初值是 1920px 而不是继续用除 2？**
+
+纯除 2 策略从原始尺寸的一半开始：
+- 6000×4000 → 第 1 轮 3000×2000 → 大概率 > 1.5MB，浪费一次解码
+- 混合模式从 1920px 起始 → 大多数照片 1 轮命中
+
+1920px 是经验值：手机上常见的高分辨率照片（12MP~48MP），压缩到 1920px + JPEG q=80 后通常输出 200~800KB，远低于 1.5MB。后续除 2 的分支仅在极端高噪点图像时触发。
 
 ### 7.2 文件读取失败
 
@@ -381,7 +459,7 @@ chat.ts: "chat.send" handler
 - [x] `PhotoCaptureService.obtainPhotoToProcess()` 读取文件 → base64 → 发送
 - [x] 使用 `util.Base64Helper` 系统 API 编码（非自实现）
 - [x] 客户端通过文件后缀推断 mimeType（非硬编码 jpeg）
-- [x] **图片压缩**：长边 > 1920px 或原始文件 > 1.5MB 时缩放 + JPEG q=80 重编码
+- [x] **图片压缩**：迭代缩放至 ≤ 1.5MB（反复将长宽减半 + JPEG q=80，至 256px 兜底）
 - [ ] 端到端验证：拍照 → 发送 → 服务端收到 → Agent 回复
 
 ### Phase 2 — 体验优化
@@ -479,25 +557,32 @@ userMessage.content = [this.createTextContent(outgoingText)];  // outgoingText =
 2. `sendChat` 构建 `userMessage.content` 时，如果有 attachments，额外追加一个 image 类型的 content block
 3. ChatPage 的 `messageTextValue` 或消息渲染逻辑中对 `image` 类型渲染缩略图
 
-### P1-01: 大文件直接 base64 全量加载到内存——无大小前置检查
+### P1-01: 大文件在压缩前被硬拒绝——11MB 照片选入即失败
 
-**位置**: `PhotoCaptureService.ets:102-110`
+**位置**: `PhotoCaptureService.ets:121-127`
 
 **问题**:
-当前流程：`stat → new ArrayBuffer(stat.size) → readSync → Base64Helper`
+当前代码在 `statSync` 之后、压缩之前做了 `if (stat.size > MAX_FILE_SIZE_BYTES) return;` 的硬拒绝。用户选取一张 11MB 的高分辨率照片（如 6000×4000 HEIC 转换后的 JPEG）时，文件直接被打回，无法进入压缩流程。
 
-服务端硬限制 5MB 解码后大小。但客户端没有任何前置检查。如果用户选了一张 20MB 的 HEIC 原图：
-1. 客户端 `new ArrayBuffer(20MB)` → 内存分配
-2. `readSync` 全量读入 → 内存中 20MB
-3. `encodeToStringSync` → base64 约 27MB 字符串
-4. `JSON.stringify` → JSON 约 27MB+
-5. WebSocket send → 序列化 27MB 到网络
+而实际上，11MB 照片完全可以通过迭代缩放压缩到 1.5MB 以内——这是压缩功能存在的意义。5MB 硬拒绝阈值使得压缩形同虚设。
 
-峰值内存占用约 **~50MB+**（原始 buffer + base64 string + JSON string + WebSocket 发送 buffer），全部在主线程。HarmonyOS 对应用内存有限制（后台 ~200MB，前台也有限额），在低端设备上可能 OOM。
+**影响**: 用户选了一张"稍大一点"的照片就失败，必须手动缩小后再选。商用不可接受。
 
-**影响**: 低端设备 OOM crash，或系统杀掉应用。
+**修复**:
+1. 将 `MAX_FILE_SIZE_BYTES` 提升至 20MB（纯安全上限，防止 OOM）
+2. 移除硬拒绝逻辑，改为：所有 > 1.5MB 的文件统一走迭代压缩
+3. 压缩后文件若仍 > 5MB（服务端上限），base64 编码后在发送前做最终校验
 
-**修复思路**: 在 `statSync` 之后、`readSync` 之前，加一个客户端侧的大小阈值检查（如 10MB），超出则拒绝或提示压缩。即便不做压缩，也必须有一个兜底上限。
+### P1-01b: 单次缩放不够——压缩后可能仍超 1.5MB
+
+**位置**: `PhotoCaptureService.ets:172-224` (`compressImageIfNeeded`)
+
+**问题**:
+当前 `compressImageIfNeeded` 只做一次缩放（长边 1920px + JPEG q=80）。如果原图分辨率极高（如 6000×4000），单次缩放到 1920×1280 后 JPEG 编码结果可能仍有 2-3MB，超过 1.5MB 目标。缺少迭代缩小机制。
+
+**影响**: 高分辨率图片压缩后仍超过 2MB 解码大小，触发服务端 offload，Agent 收不到图片内容。
+
+**修复**: 采用迭代缩放算法（见 7.1.1），反复将长宽减半直到压缩结果 ≤ 1.5MB 或边长触底 256px。
 
 ### P1-02: `encodeToStringSync` 在主线程同步阻塞——大图卡 UI
 
@@ -568,7 +653,8 @@ HarmonyOS `cameraPicker.pick()` 返回的 `resultUri` 格式为 `file://media/Ph
 | P0-01 | **必炸** | 文件句柄泄漏 — fd 不关闭 | ✅ 已修复 |
 | P0-02 | **必炸** | stat.size=0 发空图 — Agent 收不到图 | ✅ 已修复 |
 | P0-03 | **必炸** | ChatPage 本地消息无图片预览 | ✅ 已修复 |
-| P1-01 | **隐患** | 大图无前置大小检查 — 可能 OOM | ✅ 已修复 |
+| P1-01 | **隐患** | 大文件在压缩前被硬拒绝 — 11MB 照片选入即失败 | ✅ 已修复（上限提升至 20MB + 迭代压缩） |
+| P1-01b | **隐患** | 单次缩放不够 — 高分辨率图片压缩后仍超 1.5MB | ✅ 已修复（迭代减半至达标或 256px 兜底） |
 | P1-02 | **隐患** | 同步编码阻塞主线程 — 卡 UI | ✅ 已修复（改用异步 encodeToString） |
 | P1-03 | **隐患** | Base64Helper 每次新建实例 | ✅ 已修复 |
 | P2-01 | **债务** | URI 无后缀时 mimeType 回退不精确 | 后续优化 |
