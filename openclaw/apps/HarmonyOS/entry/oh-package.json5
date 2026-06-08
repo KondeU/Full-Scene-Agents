@@ -5,5 +5,9 @@
   "main": "",
   "author": "",
   "license": "Apache-2.0",
-  "dependencies": {}
+  "dependencies": {
+    "@luvi/lv-markdown-in": "^3.2.9",
+    "@luvi/html2md": "^1.0.0",
+    "@cangjie-tpc/formula_hybrid": "1.2.7"
+  }
 }

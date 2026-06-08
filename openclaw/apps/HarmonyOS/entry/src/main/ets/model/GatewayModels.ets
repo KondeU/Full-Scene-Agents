@@ -58,17 +58,66 @@ export class ChatPendingToolCall {
 }
 
 /**
- * Outgoing attachment — matches server-side RpcAttachmentInput schema.
- * content holds the base64-encoded file data (no data: prefix).
- *
- * BREAKING CHANGE (2026-06): field `data` renamed to `content` to align
- * with server protocol. New fields `mimeType` and `fileName` added.
+ * Assistant-rendered choice option parsed from a chat message
+ */
+export class ChatChoiceOption {
+  index: number = 0;
+  label: string = '';
+  value: string = '';
+}
+
+/**
+ * User-facing pending interaction choice
+ */
+export class ChatPendingInteractionChoice {
+  id: string = '';
+  label: string = '';
+  value: string = '';
+  style: string = 'secondary';
+}
+
+/**
+ * Optional input metadata for a pending interaction
+ */
+export class ChatPendingInteractionInput {
+  type: string = 'text';
+  placeholder: string = '';
+}
+
+/**
+ * Backend response target for a pending interaction
+ */
+export class ChatPendingInteractionBackend {
+  method: string = '';
+  requestId: string = '';
+  sessionId: string = '';
+  runId: string = '';
+}
+
+/**
+ * Ordinary-user interaction request rendered in chat
+ */
+export class ChatPendingInteraction {
+  id: string = '';
+  kind: string = 'clarification';
+  title: string = '';
+  body: string = '';
+  riskLevel: string = 'low';
+  choices: ChatPendingInteractionChoice[] = [];
+  input: ChatPendingInteractionInput | null = null;
+  backend: ChatPendingInteractionBackend = new ChatPendingInteractionBackend();
+  status: string = 'pending';
+}
+
+/**
+ * Outgoing attachment
  */
 export class OutgoingAttachment {
   type: string = '';
   mimeType: string = '';
   fileName: string = '';
   content: string = '';
+    data: string = '';
 }
 
 /**

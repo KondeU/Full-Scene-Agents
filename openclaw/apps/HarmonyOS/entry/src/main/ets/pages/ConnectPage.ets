@@ -1,13 +1,19 @@
 import { MainViewModel } from '../viewmodel/MainViewModel';
 import { GatewayEndpoint } from '../model/GatewayModels';
+import { GatewayMode, HERMES_DEFAULT_HOST, HERMES_DEFAULT_PORT } from '../common/SecurePrefs';
 
 @Component
 export struct ConnectPage {
   @ObjectLink viewModel: MainViewModel;
   @StorageProp('localeVersion') localeVersion: number = 0;
 
+  @State gatewayMode: string = GatewayMode.Hermes;
   @State inputMode: string = 'SetupCode';
   @State setupCode: string = '';
+  @State hermesHost: string = '';
+  @State hermesPort: string = '';
+  @State hermesTls: boolean = true;
+  @State hermesApiToken: string = '';
   @State manualHost: string = '';
   @State manualPort: string = '18789';
   @State manualTls: boolean = false;
@@ -23,7 +29,12 @@ export struct ConnectPage {
   private connectionStateListenerId: number = -1;
 
   aboutToAppear(): void {
-    this.manualHost = this.viewModel.manualHost || '127.0.0.1';
+    this.gatewayMode = this.viewModel.gatewayMode || GatewayMode.Hermes;
+    this.hermesHost = this.viewModel.hermesHost || '';
+    this.hermesPort = this.viewModel.hermesPort > 0 ? this.viewModel.hermesPort.toString() : '';
+    this.hermesTls = this.viewModel.hermesTls;
+    this.hermesApiToken = this.viewModel.hermesApiToken || '';
+    this.manualHost = this.viewModel.manualHost || '';
     this.manualPort = this.viewModel.manualPort > 0 ? this.viewModel.manualPort.toString() : '18789';
     this.manualTls = this.viewModel.manualTls;
     this.gatewayToken = this.viewModel.gatewayToken || '';
@@ -50,12 +61,17 @@ export struct ConnectPage {
         this.Header();
         this.ActiveEndpointCard();
         this.StatusCard();
-        this.PrimaryActionButton();
-        this.AdvancedToggle();
+        this.GatewayModeCard();
+        if (this.gatewayMode === GatewayMode.Hermes) {
+          this.HermesControlsCard();
+        } else {
+          this.AdvancedToggle();
 
-        if (this.advancedOpen) {
-          this.AdvancedControlsCard();
+          if (this.advancedOpen) {
+            this.AdvancedControlsCard();
+          }
         }
+        this.PrimaryActionButton();
 
         if (this.validationText.length > 0) {
           Text(this.validationText)
@@ -174,6 +190,134 @@ export struct ConnectPage {
     .onClick(() => {
       this.advancedOpen = !this.advancedOpen;
     });
+  }
+
+  @Builder GatewayModeCard() {
+    Column({ space: 12 }) {
+      Text($r('app.string.connect_gateway_type'))
+        .fontSize(12)
+        .fontWeight(FontWeight.Medium)
+        .fontColor('#4D5563');
+
+      Row() {
+        this.GatewayModeChip($r('app.string.connect_gateway_type_hermes'), GatewayMode.Hermes);
+        this.GatewayModeChip($r('app.string.connect_gateway_type_openclaw'), GatewayMode.OpenClaw);
+      }
+    }
+    .width('100%')
+    .padding({ left: 14, right: 14, top: 14, bottom: 14 })
+    .backgroundColor('#FFFFFF')
+    .borderRadius(14)
+    .border({ width: 1, color: '#E5E7EC' });
+  }
+
+  @Builder HermesControlsCard() {
+    Column({ space: 12 }) {
+      Text($r('app.string.connect_hermes_config'))
+        .fontSize(12)
+        .fontWeight(FontWeight.Medium)
+        .fontColor('#4D5563');
+
+      Text($r('app.string.connect_host'))
+        .fontSize(12)
+        .fontWeight(FontWeight.Medium)
+        .fontColor('#4D5563');
+      TextInput({ placeholder: HERMES_DEFAULT_HOST, text: this.hermesHost })
+        .width('100%')
+        .height(50)
+        .backgroundColor('#F6F7FA')
+        .borderColor('#E5E7EC')
+        .borderWidth(1)
+        .borderRadius(14)
+        .padding({ left: 12, right: 12 })
+        .fontSize(14)
+        .fontColor('#17181C')
+        .onChange((value: string) => {
+          this.hermesHost = value;
+          this.validationText = '';
+          this.viewModel.hermesHost = value.trim();
+        });
+
+      Text($r('app.string.connect_port'))
+        .fontSize(12)
+        .fontWeight(FontWeight.Medium)
+        .fontColor('#4D5563');
+      TextInput({ placeholder: HERMES_DEFAULT_PORT.toString(), text: this.hermesPort })
+        .width('100%')
+        .height(50)
+        .backgroundColor('#F6F7FA')
+        .borderColor('#E5E7EC')
+        .borderWidth(1)
+        .borderRadius(14)
+        .padding({ left: 12, right: 12 })
+        .fontSize(14)
+        .fontColor('#17181C')
+        .type(InputType.Number)
+        .onChange((value: string) => {
+          this.hermesPort = value;
+          this.validationText = '';
+          const parsedPort = parseInt(value.trim(), 10);
+          if (!Number.isNaN(parsedPort) && parsedPort >= 1 && parsedPort <= 65535) {
+            this.viewModel.hermesPort = parsedPort;
+          } else if (value.trim().length === 0) {
+            this.viewModel.hermesPort = 0;
+          }
+        });
+
+      Row() {
+        Column({ space: 2 }) {
+          Text($r('app.string.connect_use_tls'))
+            .fontSize(15)
+            .fontWeight(FontWeight.Medium)
+            .fontColor('#17181C');
+          Text($r('app.string.connect_hermes_tls_desc'))
+            .fontSize(13)
+            .fontWeight(FontWeight.Medium)
+            .fontColor('#4D5563');
+        }
+        .alignItems(HorizontalAlign.Start)
+        .layoutWeight(1);
+
+        Toggle({ type: ToggleType.Switch, isOn: this.hermesTls })
+          .selectedColor('#1D5DD8')
+          .onChange((isOn: boolean) => {
+            this.hermesTls = isOn;
+            this.validationText = '';
+            void this.viewModel.setHermesTls(isOn);
+          });
+      }
+      .width('100%');
+
+      Text($r('app.string.connect_hermes_api_token'))
+        .fontSize(12)
+        .fontWeight(FontWeight.Medium)
+        .fontColor('#4D5563');
+      TextInput({ placeholder: $r('app.string.connect_hermes_api_token_placeholder'), text: this.hermesApiToken })
+        .width('100%')
+        .height(50)
+        .backgroundColor('#F6F7FA')
+        .borderColor('#E5E7EC')
+        .borderWidth(1)
+        .borderRadius(14)
+        .padding({ left: 12, right: 12 })
+        .fontSize(14)
+        .fontColor('#17181C')
+        .type(InputType.Password)
+        .onChange((value: string) => {
+          this.hermesApiToken = value;
+          this.validationText = '';
+          this.viewModel.hermesApiToken = value.trim();
+        });
+
+      if (this.hermesResolvedEndpoint().length > 0) {
+        this.EndpointPreview(this.hermesResolvedEndpoint());
+      }
+    }
+    .width('100%')
+    .padding({ left: 14, right: 14, top: 14, bottom: 14 })
+    .backgroundColor('#FFFFFF')
+    .borderRadius(14)
+    .border({ width: 1, color: '#E5E7EC' });
   }
 
   @Builder AdvancedControlsCard() {
@@ -455,6 +599,28 @@ export struct ConnectPage {
     });
   }
 
+  @Builder GatewayModeChip(label: Resource, mode: string) {
+    Row() {
+      Text(label)
+        .fontSize(13)
+        .fontWeight(FontWeight.Bold)
+        .fontColor(this.gatewayMode === mode ? '#FFFFFF' : '#17181C');
+    }
+    .justifyContent(FlexAlign.Center)
+    .alignItems(VerticalAlign.Center)
+    .height(40)
+    .padding({ left: 16, right: 16 })
+    .borderRadius(12)
+    .backgroundColor(this.gatewayMode === mode ? '#1D5DD8' : '#F6F7FA')
+    .border({ width: 1, color: this.gatewayMode === mode ? '#184DAF' : '#D6DAE2' })
+    .margin({ right: 8 })
+    .onClick(() => {
+      this.gatewayMode = mode;
+      this.validationText = '';
+      void this.viewModel.setGatewayMode(mode);
+    });
+  }
+
   @Builder QuickFillChip(label: Resource, onClick: () => void) {
     Button({ type: ButtonType.Normal }) {
       Text(label)
@@ -528,6 +694,10 @@ export struct ConnectPage {
     if (this.connectedState && this.remoteAddressState.length > 0) {
       return this.normalizeEndpointForDisplay(this.remoteAddressState);
     }
+    if (this.gatewayMode === GatewayMode.Hermes) {
+      const hermesResolved = this.hermesResolvedEndpoint();
+      return hermesResolved.length > 0 ? hermesResolved : this.localizedText('common_not_set', 'Not set');
+    }
     if (this.inputMode === 'SetupCode') {
       const setupResolved = this.setupCodeResolvedEndpoint();
       return setupResolved.length > 0 ? setupResolved : this.localizedText('common_not_set', 'Not set');
@@ -554,6 +724,28 @@ export struct ConnectPage {
       return '';
     }
     return this.formatEndpointForDisplay(host, port, this.manualTls);
+  }
+
+  private hermesResolvedEndpoint(): string {
+    const host = this.resolveHermesHost();
+    const port = this.resolveHermesPort();
+    if (Number.isNaN(port) || port < 1 || port > 65535) {
+      return '';
+    }
+    return this.formatEndpointForDisplay(host, port, this.hermesTls) + '/v1/chat/completions';
+  }
+
+  private resolveHermesHost(): string {
+    const host = this.hermesHost.trim();
+    return host.length > 0 ? host : HERMES_DEFAULT_HOST;
+  }
+
+  private resolveHermesPort(): number {
+    const port = this.hermesPort.trim();
+    if (port.length === 0) {
+      return HERMES_DEFAULT_PORT;
+    }
+    return parseInt(port, 10);
   }
 
   private formatEndpointForDisplay(host: string, port: number | string, tlsEnabled: boolean): string {
@@ -584,6 +776,41 @@ export struct ConnectPage {
       void MainViewModel.refreshGatewayConnectionTask(this.viewModel).then((): void => {
         this.syncConnectionState();
       });
+      return;
+    }
+
+    if (this.gatewayMode === GatewayMode.Hermes) {
+      const host = this.resolveHermesHost();
+      const parsedPort = this.resolveHermesPort();
+      const apiToken = this.hermesApiToken.trim();
+      if (Number.isNaN(parsedPort) || parsedPort < 1 || parsedPort > 65535 || apiToken.length === 0) {
+        const resource = $r('app.string.connect_validation_hermes_config');
+        this.validationText = getContext(this).resourceManager.getStringSync(resource.id);
+        return;
+      }
+
+      this.viewModel.hermesHost = host;
+      this.viewModel.hermesPort = parsedPort;
+      this.viewModel.hermesTls = this.hermesTls;
+      this.viewModel.hermesApiToken = apiToken;
+
+      void MainViewModel.connectHermesTask(this.viewModel)
+        .then(() => {
+          this.syncConnectionState();
+          if (this.viewModel.isConnected) {
+            this.hermesHost = this.viewModel.hermesHost;
+            this.hermesPort = this.viewModel.hermesPort > 0 ? this.viewModel.hermesPort.toString() : '';
+            this.hermesApiToken = this.viewModel.hermesApiToken;
+          } else {
+            const resource = $r('app.string.connect_validation_connect_failed');
+            this.validationText = getContext(this).resourceManager.getStringSync(resource.id);
+          }
+        })
+        .catch(() => {
+          this.syncConnectionState();
+          const resource = $r('app.string.connect_validation_connection_error');
+          this.validationText = getContext(this).resourceManager.getStringSync(resource.id);
+        });
       return;
     }
 

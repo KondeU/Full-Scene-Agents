@@ -104,7 +104,26 @@ interface RequestHandler {
 }
 
 // Handlers parameter interface
-interface GatewayHandlers {
+export abstract class GatewaySessionLike {
+  abstract setHandlers(handlersParam: GatewayHandlers): void;
+  abstract connect(
+    endpoint: GatewayEndpoint,
+    token?: string,
+    bootstrapToken?: string,
+    password?: string,
+    options?: GatewayConnectOptions,
+    isReconnectAttempt?: boolean
+  ): Promise<void>;
+  abstract disconnect(): Promise<void>;
+  abstract isConnected(): boolean;
+  abstract isConnecting(): boolean;
+  abstract request(method: string, paramsJson?: string): Promise<GatewayResponse>;
+  abstract sendNodeEvent(event: string, payloadJson: string): Promise<boolean>;
+  abstract currentCanvasHostUrl(): string | null;
+  abstract refreshNodeCanvasCapability(): Promise<boolean>;
+}
+
+export interface GatewayHandlers {
   onConnected?: ConnectedHandler;
   onDisconnected?: DisconnectedHandler;
   onEvent?: EventHandler;
@@ -119,19 +138,19 @@ export class GatewayResponse {
   payload?: GatewayPayload;
 }
 
-class GatewayResult {
+export class GatewayResult {
   success: boolean = false;
   mainSessionKey?: string;
 }
 
-class GatewayError {
+export class GatewayError {
   code?: string;
   message: string = '';
   details?: Object;
 }
 
 // Gateway payload interface
-interface GatewayPayload {
+export interface GatewayPayload {
   id?: string;
   nodeId?: string;
   command?: string;
@@ -246,7 +265,7 @@ interface InvokePayload {
  * Gateway Session for HarmonyOS
  * Handles WebSocket communication with the gateway
  */
-export class GatewaySession {
+export class GatewaySession extends GatewaySessionLike {
   private ws: IWebSocket | null = null;
   private connected: boolean = false;
   private connecting: boolean = false;
@@ -284,6 +303,7 @@ export class GatewaySession {
   private deviceAuthStore: DeviceAuthStore;
 
   constructor(deviceIdentityStoreParam: DeviceIdentityStore, deviceAuthStoreParam: DeviceAuthStore) {
+    super();
     this.deviceIdentityStore = deviceIdentityStoreParam;
     this.deviceAuthStore = deviceAuthStoreParam;
   }

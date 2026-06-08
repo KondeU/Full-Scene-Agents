@@ -15,6 +15,11 @@ class SecureEnvelope {
   ciphertext: string = '';
 }
 
+class InitializationWaiter {
+  resolve: () => void = () => {};
+  reject: (reason: Error) => void = (_reason: Error) => {};
+}
+
 // LocationMode type alias
 export enum LocationMode {
   Off = 'off',
@@ -22,8 +27,15 @@ export enum LocationMode {
   Precise = 'precise'
 }
 
+export enum GatewayMode {
+  Hermes = 'hermes',
+  OpenClaw = 'openclaw'
+}
+
 // Default location mode constant
 const LOCATION_MODE_DEFAULT: string = 'off';
+export const HERMES_DEFAULT_HOST: string = 'gatewaywrt.agentos.yoga';
+export const HERMES_DEFAULT_PORT: number = 443;
 
 /**
  * Secure Preferences wrapper for HarmonyOS
@@ -35,6 +47,7 @@ export class SecurePrefs {
   private securePreferences: preferences.Preferences | null = null;
   private initialized: boolean = false;
   private initPromise: Promise<void> | null = null;
+  private initializationWaiters: InitializationWaiter[] = [];
   private secureKeyReady: boolean = false;
   private secureKeyPromise: Promise<void> | null = null;
 
@@ -67,8 +80,10 @@ export class SecurePrefs {
         // Initialize default values
         await this.initDefaults();
         this.initialized = true;
+        this.resolveInitializationWaiters();
       } catch (error) {
         console.error('SecurePrefs init error:', error);
+        this.rejectInitializationWaiters(error as Error);
         throw new Error('SecurePrefs init failed');
       }
     })();
@@ -82,7 +97,31 @@ export class SecurePrefs {
     }
     if (this.initPromise) {
       await this.initPromise;
+      return;
     }
+
+    await new Promise<void>((resolve: () => void, reject: (reason: Error) => void): void => {
+      const waiter = new InitializationWaiter();
+      waiter.resolve = resolve;
+      waiter.reject = reject;
+      this.initializationWaiters = [...this.initializationWaiters, waiter];
+    });
+  }
+
+  private resolveInitializationWaiters(): void {
+    const waiters = this.initializationWaiters;
+    this.initializationWaiters = [];
+    waiters.forEach((waiter: InitializationWaiter): void => {
+      waiter.resolve();
+    });
+  }
+
+  private rejectInitializationWaiters(error: Error): void {
+    const waiters = this.initializationWaiters;
+    this.initializationWaiters = [];
+    waiters.forEach((waiter: InitializationWaiter): void => {
+      waiter.reject(error);
+    });
   }
 
   private async initDefaults(): Promise<void> {
@@ -100,10 +139,14 @@ export class SecurePrefs {
       'prevent_sleep',
       'talk_enabled',
       'speaker_enabled',
+      'gateway_mode',
       'manual_enabled',
       'manual_host',
       'manual_port',
       'manual_tls',
+      'hermes_host',
+      'hermes_port',
+      'hermes_tls',
       'onboarding_completed',
       'canvas_debug_status_enabled',
       'last_discovered_stable_id'
@@ -119,10 +162,14 @@ export class SecurePrefs {
       'prevent_sleep': false,
       'talk_enabled': false,
       'speaker_enabled': false,
+      'gateway_mode': GatewayMode.Hermes,
       'manual_enabled': false,
       'manual_host': '',
       'manual_port': 18789,
       'manual_tls': false,
+      'hermes_host': '',
+      'hermes_port': 0,
+      'hermes_tls': true,
       'onboarding_completed': false,
       'canvas_debug_status_enabled': false,
       'last_discovered_stable_id': ''
@@ -245,6 +292,48 @@ export class SecurePrefs {
 
   async setManualTls(value: boolean): Promise<void> {
     await this.putBoolean('manual_tls', value);
+  }
+
+  async getGatewayMode(): Promise<string> {
+    const mode = await this.getString('gateway_mode', GatewayMode.Hermes);
+    return mode === GatewayMode.OpenClaw ? GatewayMode.OpenClaw : GatewayMode.Hermes;
+  }
+
+  async setGatewayMode(value: string): Promise<void> {
+    const mode = value === GatewayMode.OpenClaw ? GatewayMode.OpenClaw : GatewayMode.Hermes;
+    await this.putString('gateway_mode', mode);
+  }
+
+  async getHermesHost(): Promise<string> {
+    return this.getString('hermes_host', '');
+  }
+
+  async setHermesHost(value: string): Promise<void> {
+    await this.putString('hermes_host', value);
+  }
+
+  async getHermesPort(): Promise<number> {
+    return this.getNumber('hermes_port', 0);
+  }
+
+  async setHermesPort(value: number): Promise<void> {
+    await this.putNumber('hermes_port', value);
+  }
+
+  async getHermesTls(): Promise<boolean> {
+    return this.getBoolean('hermes_tls', true);
+  }
+
+  async setHermesTls(value: boolean): Promise<void> {
+    await this.putBoolean('hermes_tls', value);
+  }
+
+  async getHermesApiToken(): Promise<string> {
+    return this.getSecureString('hermes_api_token', '');
+  }
+
+  async setHermesApiToken(value: string): Promise<void> {
+    await this.putSecureString('hermes_api_token', value);
   }
 
   async getGatewayToken(): Promise<string> {

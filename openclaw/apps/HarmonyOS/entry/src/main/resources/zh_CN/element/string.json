@@ -125,6 +125,14 @@
       "value": "输入消息…"
     },
     {
+      "name": "chat_skill_launchers",
+      "value": "快捷入口"
+    },
+    {
+      "name": "chat_skill_launcher_placeholder",
+      "value": "输入要生成的目标…"
+    },
+    {
       "name": "chat_connect_placeholder",
       "value": "请先连接网关后再聊天"
     },
@@ -193,6 +201,22 @@
       "value": "网关状态"
     },
     {
+      "name": "connect_gateway_type",
+      "value": "网关类型"
+    },
+    {
+      "name": "connect_gateway_type_hermes",
+      "value": "Hermes"
+    },
+    {
+      "name": "connect_gateway_type_openclaw",
+      "value": "OpenClaw"
+    },
+    {
+      "name": "connect_hermes_config",
+      "value": "Hermes 网关"
+    },
+    {
       "name": "connect_advanced_controls",
       "value": "高级控制"
     },
@@ -235,6 +259,22 @@
     {
       "name": "connect_use_tls_desc",
       "value": "切换到安全 websocket（wss）。"
+    },
+    {
+      "name": "connect_hermes_tls_desc",
+      "value": "使用 HTTPS 请求 Hermes 网关。"
+    },
+    {
+      "name": "connect_hermes_api_token",
+      "value": "API Token"
+    },
+    {
+      "name": "connect_hermes_api_token_placeholder",
+      "value": "Bearer token"
+    },
+    {
+      "name": "connect_hermes_host_placeholder",
+      "value": "网关域名"
     },
     {
       "name": "connect_token_optional",
@@ -303,6 +343,10 @@
     {
       "name": "connect_validation_manual_host_port",
       "value": "请输入有效的手动主机和端口以连接。"
+    },
+    {
+      "name": "connect_validation_hermes_config",
+      "value": "请输入有效的 Hermes host、端口和 API token。"
     },
     {
       "name": "connect_validation_connect_failed",
@@ -889,6 +933,10 @@
       "value": "网关"
     },
     {
+      "name": "settings_gateway_type",
+      "value": "网关类型"
+    },
+    {
       "name": "settings_manual_mode",
       "value": "手动模式"
     },
@@ -951,6 +999,10 @@
     {
       "name": "common_status_invalid_manual_config",
       "value": "手动网关配置无效"
+    },
+    {
+      "name": "common_status_invalid_hermes_config",
+      "value": "网关配置无效"
     },
     {
       "name": "common_status_missing_setup_code",
@@ -1062,7 +1114,7 @@
     },
     {
       "name": "onboarding_setup_code_placeholder",
-      "value": "粘贴 openclaw qr --setup-code-only 生成的设置码"
+      "value": "粘贴 qr --setup-code-only 生成的设置码"
     },
     {
       "name": "onboarding_quickfill_emulator",

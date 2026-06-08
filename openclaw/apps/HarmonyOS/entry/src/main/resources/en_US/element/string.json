@@ -125,6 +125,14 @@
       "value": "Type a message..."
     },
     {
+      "name": "chat_skill_launchers",
+      "value": "Shortcuts"
+    },
+    {
+      "name": "chat_skill_launcher_placeholder",
+      "value": "Type the goal to save..."
+    },
+    {
       "name": "chat_connect_placeholder",
       "value": "Connect to a gateway to chat"
     },
@@ -193,6 +201,22 @@
       "value": "Gateway state"
     },
     {
+      "name": "connect_gateway_type",
+      "value": "Gateway type"
+    },
+    {
+      "name": "connect_gateway_type_hermes",
+      "value": "Hermes"
+    },
+    {
+      "name": "connect_gateway_type_openclaw",
+      "value": "OpenClaw"
+    },
+    {
+      "name": "connect_hermes_config",
+      "value": "Hermes gateway"
+    },
+    {
       "name": "connect_advanced_controls",
       "value": "Advanced controls"
     },
@@ -235,6 +259,22 @@
     {
       "name": "connect_use_tls_desc",
       "value": "Switch to secure websocket (wss)."
+    },
+    {
+      "name": "connect_hermes_tls_desc",
+      "value": "Use HTTPS for Hermes gateway requests."
+    },
+    {
+      "name": "connect_hermes_api_token",
+      "value": "API token"
+    },
+    {
+      "name": "connect_hermes_api_token_placeholder",
+      "value": "Bearer token"
+    },
+    {
+      "name": "connect_hermes_host_placeholder",
+      "value": "gateway host"
     },
     {
       "name": "connect_token_optional",
@@ -303,6 +343,10 @@
     {
       "name": "connect_validation_manual_host_port",
       "value": "Enter a valid manual host and port to connect."
+    },
+    {
+      "name": "connect_validation_hermes_config",
+      "value": "Enter a valid host, port, and API token."
     },
     {
       "name": "connect_validation_connect_failed",
@@ -889,6 +933,10 @@
       "value": "GATEWAY"
     },
     {
+      "name": "settings_gateway_type",
+      "value": "Gateway type"
+    },
+    {
       "name": "settings_manual_mode",
       "value": "Manual mode"
     },
@@ -951,6 +999,10 @@
     {
       "name": "common_status_invalid_manual_config",
       "value": "Invalid manual gateway configuration"
+    },
+    {
+      "name": "common_status_invalid_hermes_config",
+      "value": "Invalid gateway configuration"
     },
     {
       "name": "common_status_missing_setup_code",
@@ -1062,7 +1114,7 @@
     },
     {
       "name": "onboarding_setup_code_placeholder",
-      "value": "Paste code from openclaw qr --setup-code-only"
+      "value": "Paste code from qr --setup-code-only"
     },
     {
       "name": "onboarding_quickfill_emulator",

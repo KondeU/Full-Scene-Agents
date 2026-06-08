@@ -1,5 +1,5 @@
 import { MainViewModel } from '../viewmodel/MainViewModel';
-import { ChatMessage, ChatPendingToolCall, ChatSessionEntry } from '../model/GatewayModels';
+import { ChatChoiceOption, ChatMessage, ChatPendingInteraction, ChatPendingInteractionChoice, ChatPendingToolCall, ChatSessionEntry } from '../model/GatewayModels';
 import { Markdown, MarkdownController } from '@luvi/lv-markdown-in';
 
 @Component
@@ -10,6 +10,10 @@ export struct ChatPage {
   @State messageText: string = '';
   @State showThinkingOptions: boolean = false;
   @State showSessionList: boolean = false;
+  @State showSkillLaunchers: boolean = false;
+  @State selectedSkillLauncherPrefix: string = '';
+  @State selectedSkillLauncherIcon: string = '';
+  @State selectedSkillLauncherLabel: string = '';
   @State chatMessagesState: ChatMessage[] = [];
   @State chatStreamingTextState: string = '';
   @State chatPendingToolCallsState: ChatPendingToolCall[] = [];
@@ -19,6 +23,9 @@ export struct ChatPage {
   @State chatSessionKeyState: string = '';
   @State chatSessionsState: ChatSessionEntry[] = [];
   @State pendingRunCountState: number = 0;
+  @State composerInputVisible: boolean = true;
+  @State latestAssistantChoiceOptionsState: ChatChoiceOption[] = [];
+  @State pendingInteractionsState: ChatPendingInteraction[] = [];
 
   private chatStateListenerId: number = -1;
   private messageScroller: Scroller = new Scroller();
@@ -97,6 +104,7 @@ export struct ChatPage {
         .onClick(() => {
           this.showSessionList = !this.showSessionList;
           this.showThinkingOptions = false;
+          this.showSkillLaunchers = false;
         });
       }
       .width('100%');
@@ -189,6 +197,14 @@ export struct ChatPage {
           if (this.chatPendingToolCallsState.length > 0) {
             this.PendingToolCallsRail();
           }
+
+          if (this.pendingInteractionsState.length > 0) {
+            this.PendingInteractionCards(this.pendingInteractionsState);
+          }
+
+          if (this.latestAssistantChoiceOptionsState.length > 0) {
+            this.AssistantChoiceOptions(this.latestAssistantChoiceOptionsState);
+          }
         }
       }
       .width('100%')
@@ -221,17 +237,22 @@ export struct ChatPage {
   }
 
   @Builder MessageItem(message: ChatMessage) {
-    Row({ space: 3 }) {
-      if (message.role !== 'user') {
-        this.MessageAvatar(false);
-      } else {
-        Blank().width(32);
-      }
-
+    Row({ space: 8 }) {
       if (message.role === 'user') {
         Blank().layoutWeight(1);
+        this.MessageBubble(message);
+        this.MessageAvatar(true);
+      } else {
+        this.MessageAvatar(false);
+        this.MessageBubble(message);
+        Blank().layoutWeight(1);
       }
+    }
+    .width('100%')
+    .alignItems(VerticalAlign.Top);
+  }
 
+  @Builder MessageBubble(message: ChatMessage) {
       Column({ space: 4 }) {
         this.MarkdownMessage(this.messageTextValue(message), message.role === 'user');
         // 渲染消息中的图片内容块（缩略图）
@@ -244,25 +265,14 @@ export struct ChatPage {
             .backgroundColor('#F6F7FA');
         });
       }
-      .constraintSize({ minWidth: 0, maxWidth: '80%' })
+      .width(message.role === 'user' ? '72%' : '78%')
+      .constraintSize({ minWidth: 0, maxWidth: message.role === 'user' ? '72%' : '78%' })
       .flexShrink(1)
       .padding({ left: 12, right: 12, top: 10, bottom: 10 })
       .backgroundColor(message.role === 'user' ? '#98E866' : '#FFFFFF')
       .borderRadius(16)
       .border({ width: message.role === 'user' ? 0 : 1, color: '#E5E7EC' })
       .shadow({ radius: 8, color: '#14000000', offsetX: 0, offsetY: 2 });
-
-      if (message.role !== 'user') {
-        Blank().layoutWeight(1);
-      }
-
-      if (message.role === 'user') {
-        this.MessageAvatar(true);
-      } else {
-        Blank().width(32);
-      }
-    }
-    .width('100%');
   }
 
   @Builder StreamingMessage(text: string) {
@@ -277,6 +287,7 @@ export struct ChatPage {
 
         this.StreamingMarkdownContent(text);
       }
+      .width('78%')
       .constraintSize({ minWidth: 0, maxWidth: '78%' })
       .flexShrink(1)
       .padding({ left: 12, right: 12, top: 10, bottom: 10 })
@@ -287,7 +298,8 @@ export struct ChatPage {
 
       Blank().layoutWeight(1);
     }
-    .width('100%');
+    .width('100%')
+    .alignItems(VerticalAlign.Top);
   }
 
   @Builder MessageAvatar(isUser: boolean) {
@@ -307,10 +319,26 @@ export struct ChatPage {
   }
 
   @Builder MarkdownMessage(text: string, isUser: boolean) {
+    if (isUser || this.shouldUsePlainTextBubble(text)) {
+      this.PlainTextMessage(text, isUser);
+    } else {
       Markdown({
         controller: this.getMarkdownControllerForRole(isUser),
         text: this.bubbleSafeMarkdown(text)
-      }).constraintSize({ minWidth: 0 })
+      })
+      .width('100%')
+      .constraintSize({ minWidth: 0 });
+    }
+  }
+
+  @Builder PlainTextMessage(text: string, isUser: boolean) {
+    Text(text || '')
+      .fontSize(14)
+      .fontWeight(FontWeight.Regular)
+      .fontColor(isUser ? '#0B4F22' : '#17181C')
+      .lineHeight(20)
+      .width('100%')
+      .wordBreak(WordBreak.BREAK_ALL);
   }
 
   @Builder StreamingMarkdownContent(text: string) {
@@ -360,6 +388,87 @@ export struct ChatPage {
     .width('100%');
   }
 
+  @Builder AssistantChoiceOptions(options: ChatChoiceOption[]) {
+    Column({ space: 8 }) {
+      ForEach(options, (option: ChatChoiceOption) => {
+        Button({ type: ButtonType.Normal }) {
+          Row({ space: 8 }) {
+            Text(String(option.index))
+              .fontSize(12)
+              .fontWeight(FontWeight.Bold)
+              .fontColor('#1D5DD8');
+
+            Text(option.label)
+              .fontSize(14)
+              .fontWeight(FontWeight.Medium)
+              .fontColor('#17181C')
+              .layoutWeight(1)
+              .textAlign(TextAlign.Start)
+              .maxLines(3);
+          }
+          .width('100%')
+          .alignItems(VerticalAlign.Center);
+        }
+        .width('78%')
+        .constraintSize({ minHeight: 44 })
+        .margin({ left: 40 })
+        .padding({ left: 12, right: 12, top: 8, bottom: 8 })
+        .backgroundColor('#F7F8FA')
+        .borderRadius(12)
+        .border({ width: 1, color: '#D6DAE2' })
+        .enabled(this.pendingRunCountState === 0 && this.chatHealthOkState)
+        .onClick(() => {
+          this.sendChoiceOption(option);
+        });
+      }, (option: ChatChoiceOption) => String(option.index) + '|' + option.label);
+    }
+    .width('100%')
+    .alignItems(HorizontalAlign.Start);
+  }
+
+  @Builder PendingInteractionCards(interactions: ChatPendingInteraction[]) {
+    Column({ space: 10 }) {
+      ForEach(interactions, (interaction: ChatPendingInteraction) => {
+        Column({ space: 8 }) {
+          Text(interaction.title)
+            .fontSize(15)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(interaction.riskLevel === 'high' ? '#B42318' : '#17181C');
+
+          if (interaction.body.length > 0) {
+            Text(interaction.body)
+              .fontSize(14)
+              .fontColor('#3D4452')
+              .maxLines(4);
+          }
+
+          Row({ space: 8 }) {
+            ForEach(interaction.choices, (choice: ChatPendingInteractionChoice) => {
+              Button(choice.label)
+                .fontSize(13)
+                .fontWeight(FontWeight.Medium)
+                .fontColor(choice.style === 'danger' ? '#B42318' : '#FFFFFF')
+                .backgroundColor(choice.style === 'danger' ? '#FFF1F0' : '#1D5DD8')
+                .borderRadius(10)
+                .enabled(interaction.status === 'pending')
+                .onClick(() => {
+                  this.sendPendingInteractionChoice(interaction, choice.value);
+                });
+            }, (choice: ChatPendingInteractionChoice) => choice.id + '|' + choice.label);
+          }
+        }
+        .width('78%')
+        .margin({ left: 40 })
+        .padding({ left: 12, right: 12, top: 10, bottom: 10 })
+        .backgroundColor('#F7F8FA')
+        .borderRadius(12)
+        .border({ width: 1, color: '#D6DAE2' });
+      }, (interaction: ChatPendingInteraction) => interaction.id);
+    }
+    .width('100%')
+    .alignItems(HorizontalAlign.Start);
+  }
+
   @Builder Composer() {
     Column({ space: 10 }) {
       Row() {
@@ -376,6 +485,7 @@ export struct ChatPage {
         .onClick(() => {
           this.showThinkingOptions = !this.showThinkingOptions;
           this.showSessionList = false;
+          this.showSkillLaunchers = false;
         });
 
         Blank();
@@ -405,22 +515,56 @@ export struct ChatPage {
         this.SessionList();
       }
 
+      if (this.showSkillLaunchers) {
+        this.SkillLauncherPanel();
+      }
+
       Row() {
-        TextInput({ placeholder: this.chatHealthOkState ? $r('app.string.chat_input_placeholder') : $r('app.string.chat_connect_placeholder'), text: this.messageText })
-          .layoutWeight(1)
-          .height(48)
-          .backgroundColor('#F7F8FA')
-          .borderColor('#E5E7EC')
-          .borderWidth(1)
-          .borderRadius(22)
-          .padding({ left: 16, right: 16 })
-          .fontSize(14)
-          .fontColor('#17181C')
-          .enabled(this.chatHealthOkState && this.pendingRunCountState === 0)
-          .margin({ right: 8 })
-          .onChange((value: string) => {
-            this.messageText = value;
-          });
+        Button({ type: ButtonType.Normal }) {
+          Text(this.selectedSkillLauncherIcon.length > 0 ? this.selectedSkillLauncherIcon : '/')
+            .fontSize(this.selectedSkillLauncherIcon.length > 0 ? 20 : 18)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(this.canOpenSkillLaunchers() || this.selectedSkillLauncherPrefix.length > 0 ? '#1D5DD8' : '#8A92A2');
+        }
+        .width(48)
+        .height(48)
+        .backgroundColor(this.selectedSkillLauncherPrefix.length > 0 ? '#ECF3FF' : '#F7F8FA')
+        .borderRadius(24)
+        .border({ width: 1, color: this.selectedSkillLauncherPrefix.length > 0 ? '#BFD5FF' : '#E5E7EC' })
+        .enabled(this.canOpenSkillLaunchers() || this.selectedSkillLauncherPrefix.length > 0)
+        .margin({ right: 8 })
+        .onClick(() => {
+          if (this.selectedSkillLauncherPrefix.length > 0) {
+            this.clearSkillLauncher();
+            return;
+          }
+          this.showSkillLaunchers = !this.showSkillLaunchers;
+          this.showThinkingOptions = false;
+          this.showSessionList = false;
+        });
+
+        if (this.composerInputVisible) {
+          TextInput({ placeholder: this.inputPlaceholder(), text: this.messageText })
+            .layoutWeight(1)
+            .height(48)
+            .backgroundColor('#F7F8FA')
+            .borderColor('#E5E7EC')
+            .borderWidth(1)
+            .borderRadius(22)
+            .padding({ left: 16, right: 16 })
+            .fontSize(14)
+            .fontColor('#17181C')
+            .enabled(this.chatHealthOkState && this.pendingRunCountState === 0)
+            .margin({ right: 8 })
+            .onChange((value: string) => {
+              this.messageText = value;
+            });
+        } else {
+          Blank()
+            .layoutWeight(1)
+            .height(48)
+            .margin({ right: 8 });
+        }
 
         Button(this.pendingRunCountState > 0 ? '■' : '➤')
           .width(48)
@@ -443,6 +587,57 @@ export struct ChatPage {
     }
     .width('100%')
     .padding({ top: 8, bottom: 4 });
+  }
+
+  @Builder SkillLauncherPanel() {
+    Column({ space: 8 }) {
+      Row() {
+        Text(this.localizedText('chat_skill_launchers', 'Shortcuts'))
+          .fontSize(14)
+          .fontWeight(FontWeight.Bold)
+          .fontColor('#17181C');
+
+        Blank();
+
+        Text($r('app.string.chat_close'))
+          .fontSize(16)
+          .fontColor('#8A92A2')
+          .onClick(() => {
+            this.showSkillLaunchers = false;
+          });
+      }
+      .width('100%');
+
+      Row({ space: 10 }) {
+        Button({ type: ButtonType.Normal }) {
+          Column({ space: 4 }) {
+            Text('🧩')
+              .fontSize(22);
+            Text('genSkills')
+              .fontSize(12)
+              .fontWeight(FontWeight.Bold)
+              .fontColor('#17181C');
+          }
+        }
+        .width(92)
+        .height(72)
+        .backgroundColor('#F7F8FA')
+        .borderRadius(12)
+        .border({ width: 1, color: '#E5E7EC' })
+        .onClick(() => {
+          this.selectedSkillLauncherPrefix = '/genskills';
+          this.selectedSkillLauncherIcon = '🧩';
+          this.selectedSkillLauncherLabel = 'genSkills';
+          this.showSkillLaunchers = false;
+        });
+      }
+      .width('100%');
+    }
+    .width('100%')
+    .padding({ left: 12, right: 12, top: 12, bottom: 12 })
+    .backgroundColor('#FFFFFF')
+    .borderRadius(12)
+    .border({ width: 1, color: '#E5E7EC' });
   }
 
   @Builder ThinkingOptions() {
@@ -534,6 +729,10 @@ export struct ChatPage {
     return this.chatHealthOkState && this.pendingRunCountState === 0 && this.messageText.trim().length > 0;
   }
 
+  private canOpenSkillLaunchers(): boolean {
+    return this.chatHealthOkState && this.pendingRunCountState === 0;
+  }
+
   private canAbortMessage(): boolean {
     return this.pendingRunCountState > 0;
   }
@@ -544,9 +743,35 @@ export struct ChatPage {
     }
 
     const message = this.messageText.trim();
+    const launcherPrefix = this.selectedSkillLauncherPrefix.trim();
+    const launcherIcon = this.selectedSkillLauncherIcon.trim();
     this.messageText = '';
+    this.clearSkillLauncher();
+    this.suppressComposerInputFocusRestore();
+
+    if (launcherPrefix.length > 0) {
+      this.viewModel.sendChat(`${launcherPrefix} ${message}`, this.chatThinkingLevelState, [], `${launcherIcon} ${message}`.trim());
+      return;
+    }
 
     this.viewModel.sendChat(message, this.chatThinkingLevelState, []);
+  }
+
+  private clearSkillLauncher(): void {
+    this.selectedSkillLauncherPrefix = '';
+    this.selectedSkillLauncherIcon = '';
+    this.selectedSkillLauncherLabel = '';
+    this.showSkillLaunchers = false;
+  }
+
+  private inputPlaceholder(): string {
+    if (!this.chatHealthOkState) {
+      return this.localizedText('chat_connect_placeholder', 'Connect to a gateway to chat');
+    }
+    if (this.selectedSkillLauncherPrefix.length > 0) {
+      return this.localizedText('chat_skill_launcher_placeholder', 'Type the goal to save...');
+    }
+    return this.localizedText('chat_input_placeholder', 'Type a message...');
   }
 
   private abortMessage(): void {
@@ -575,6 +800,7 @@ export struct ChatPage {
   }
 
   private syncChatState(): void {
+    const wasPending = this.pendingRunCountState > 0;
     this.chatMessagesState = [...this.viewModel.chatMessages];
     this.chatStreamingTextState = this.viewModel.chatStreamingAssistantText || '';
     this.chatPendingToolCallsState = [...this.viewModel.chatPendingToolCalls];
@@ -584,7 +810,24 @@ export struct ChatPage {
     this.chatSessionKeyState = this.viewModel.chatSessionKey || this.viewModel.mainSessionKey;
     this.chatSessionsState = [...this.viewModel.chatSessions];
     this.pendingRunCountState = this.viewModel.pendingRunCount;
+    this.pendingInteractionsState = [...this.viewModel.chatPendingInteractions];
+    this.latestAssistantChoiceOptionsState = this.pendingInteractionsState.length === 0 ? this.extractChoiceOptions(this.latestAssistantText()) : [];
+    if (wasPending && this.pendingRunCountState === 0) {
+      this.restoreComposerInputAfterRun();
+    }
     this.scheduleScrollToBottom();
+  }
+
+  private suppressComposerInputFocusRestore(): void {
+    this.composerInputVisible = false;
+  }
+
+  private restoreComposerInputAfterRun(): void {
+    setTimeout(() => {
+      if (this.pendingRunCountState === 0) {
+        this.composerInputVisible = true;
+      }
+    }, 160);
   }
 
   private configureMarkdownControllers(): void {
@@ -645,7 +888,10 @@ export struct ChatPage {
   }
 
   private scheduleScrollToBottom(): void {
-    const scrollToken = String(this.chatMessagesState.length) + '|' + this.chatStreamingTextState + '|' + String(this.chatPendingToolCallsState.length);
+    const scrollToken = String(this.chatMessagesState.length) +
+      '|' + this.chatStreamingTextState +
+      '|' + String(this.chatPendingToolCallsState.length) +
+      '|' + String(this.pendingInteractionsState.length);
     if (scrollToken === this.lastScrollToken) {
       return;
     }
@@ -667,6 +913,66 @@ export struct ChatPage {
 
   private bubbleSafeMarkdown(text: string): string {
     return text || '';
+  }
+
+  private latestAssistantText(): string {
+    if (this.chatStreamingTextState.trim().length > 0) {
+      return this.chatStreamingTextState;
+    }
+    for (let i = this.chatMessagesState.length - 1; i >= 0; i--) {
+      const message = this.chatMessagesState[i];
+      if (message.role === 'assistant') {
+        return this.messageTextValue(message);
+      }
+    }
+    return '';
+  }
+
+  private extractChoiceOptions(text: string): ChatChoiceOption[] {
+    const options: ChatChoiceOption[] = [];
+    const lines = (text || '').split('\n');
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      const match = line.match(/^([1-9])[\.\)、)]\s*(.+)$/);
+      if (!match || match.length < 3) {
+        continue;
+      }
+      const option = new ChatChoiceOption();
+      option.index = Number(match[1]);
+      option.label = match[2].trim();
+      option.value = String(option.index) + '. ' + option.label;
+      if (option.label.length > 0) {
+        options.push(option);
+      }
+    }
+    if (options.length < 2) {
+      return [];
+    }
+    return options;
+  }
+
+  private sendChoiceOption(option: ChatChoiceOption): void {
+    if (this.pendingRunCountState > 0 || !this.chatHealthOkState || option.value.trim().length === 0) {
+      return;
+    }
+    this.latestAssistantChoiceOptionsState = [];
+    this.suppressComposerInputFocusRestore();
+    this.viewModel.sendChat(option.value, this.chatThinkingLevelState, []);
+  }
+
+  private sendPendingInteractionChoice(interaction: ChatPendingInteraction, value: string): void {
+    if (!this.chatHealthOkState || value.trim().length === 0) {
+      return;
+    }
+    this.suppressComposerInputFocusRestore();
+    this.viewModel.respondPendingInteraction(interaction, value);
+  }
+
+  private shouldUsePlainTextBubble(text: string): boolean {
+    if (!text || text.length === 0) {
+      return true;
+    }
+    return /[A-Za-z0-9_./:-]{24,}/.test(text);
   }
 
   private localizedThinkingLevel(level: string): string {

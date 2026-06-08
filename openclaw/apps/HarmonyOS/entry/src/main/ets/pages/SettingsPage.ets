@@ -1,5 +1,5 @@
 import { MainViewModel } from '../viewmodel/MainViewModel';
-import { LocationMode } from '../common/SecurePrefs';
+import { GatewayMode, LocationMode, HERMES_DEFAULT_HOST, HERMES_DEFAULT_PORT } from '../common/SecurePrefs';
 
 @Component
 export struct SettingsPage {
@@ -13,6 +13,11 @@ export struct SettingsPage {
   @State preventSleep: boolean = false;
   @State micEnabled: boolean = false;
   @State speakerEnabled: boolean = false;
+  @State gatewayMode: string = GatewayMode.Hermes;
+  @State hermesHost: string = '';
+  @State hermesPort: string = '';
+  @State hermesTls: boolean = true;
+  @State hermesApiToken: string = '';
   @State manualEnabled: boolean = false;
   @State manualHost: string = '';
   @State manualPort: string = '18789';
@@ -32,6 +37,11 @@ export struct SettingsPage {
     this.preventSleep = this.viewModel.preventSleep;
     this.micEnabled = this.viewModel.micEnabled;
     this.speakerEnabled = this.viewModel.speakerEnabled;
+    this.gatewayMode = this.viewModel.gatewayMode || GatewayMode.Hermes;
+    this.hermesHost = this.viewModel.hermesHost;
+    this.hermesPort = this.viewModel.hermesPort > 0 ? this.viewModel.hermesPort.toString() : '';
+    this.hermesTls = this.viewModel.hermesTls;
+    this.hermesApiToken = this.viewModel.hermesApiToken;
     this.manualEnabled = this.viewModel.manualEnabled;
     this.manualHost = this.viewModel.manualHost;
     this.manualPort = this.viewModel.manualPort > 0 ? this.viewModel.manualPort.toString() : '18789';
@@ -242,20 +252,25 @@ export struct SettingsPage {
         .fontColor('#1D5DD8');
 
       Column({ space: 12 }) {
-        this.SettingToggle(this.localizedText('settings_manual_mode', 'Manual mode'), this.localizedText('settings_manual_mode_desc', 'Use saved host, port, and TLS defaults for connections.'), this.manualEnabled, (value: boolean) => {
-          this.manualEnabled = value;
-          void this.viewModel.setManualEnabled(value);
-        });
+        Text(this.localizedText('settings_gateway_type', 'Gateway type'))
+          .fontSize(12)
+          .fontWeight(FontWeight.Medium)
+          .fontColor('#4D5563');
 
-        if (this.manualEnabled) {
-          this.DividerLine();
+        Row() {
+          this.GatewayModeItem(this.localizedText('connect_gateway_type_hermes', 'Hermes'), GatewayMode.Hermes);
+          this.GatewayModeItem(this.localizedText('connect_gateway_type_openclaw', 'OpenClaw'), GatewayMode.OpenClaw);
+        }
 
-          Text($r('app.string.connect_host'))
+        this.DividerLine();
+
+        if (this.gatewayMode === GatewayMode.Hermes) {
+          Text(this.localizedText('connect_host', 'Host'))
             .fontSize(12)
             .fontWeight(FontWeight.Medium)
             .fontColor('#4D5563');
 
-          TextInput({ placeholder: '127.0.0.1', text: this.manualHost })
+          TextInput({ placeholder: HERMES_DEFAULT_HOST, text: this.hermesHost })
             .width('100%')
             .height(50)
             .backgroundColor('#F6F7FA')
@@ -266,16 +281,16 @@ export struct SettingsPage {
             .fontSize(14)
             .fontColor('#17181C')
             .onChange((value: string) => {
-              this.manualHost = value;
-              void this.viewModel.setManualHost(value);
+              this.hermesHost = value;
+              void this.viewModel.setHermesHost(value.trim());
             });
 
-            Text($r('app.string.connect_port'))
+          Text(this.localizedText('connect_port', 'Port'))
             .fontSize(12)
             .fontWeight(FontWeight.Medium)
             .fontColor('#4D5563');
 
-          TextInput({ placeholder: '18789', text: this.manualPort })
+          TextInput({ placeholder: HERMES_DEFAULT_PORT.toString(), text: this.hermesPort })
             .width('100%')
             .height(50)
             .backgroundColor('#F6F7FA')
@@ -287,14 +302,95 @@ export struct SettingsPage {
             .fontColor('#17181C')
             .type(InputType.Number)
             .onChange((value: string) => {
-              this.manualPort = value;
-              void this.viewModel.setManualPort(parseInt(value, 10) || 0);
+              this.hermesPort = value;
+              const parsedPort = parseInt(value, 10);
+              if (!Number.isNaN(parsedPort) && parsedPort >= 1 && parsedPort <= 65535) {
+                void this.viewModel.setHermesPort(parsedPort);
+              } else if (value.trim().length === 0) {
+                void this.viewModel.setHermesPort(0);
+              }
             });
 
-          this.SettingToggle(this.localizedText('connect_use_tls', 'Use TLS'), this.localizedText('settings_use_tls_desc', 'Prefer secure websocket (wss) for the manual endpoint.'), this.manualTls, (value: boolean) => {
-            this.manualTls = value;
-            void this.viewModel.setManualTls(value);
+          this.SettingToggle(this.localizedText('connect_use_tls', 'Use TLS'), this.localizedText('connect_hermes_tls_desc', 'Use HTTPS for Hermes gateway requests.'), this.hermesTls, (value: boolean) => {
+            this.hermesTls = value;
+            void this.viewModel.setHermesTls(value);
           });
+
+          Text(this.localizedText('connect_hermes_api_token', 'API token'))
+            .fontSize(12)
+            .fontWeight(FontWeight.Medium)
+            .fontColor('#4D5563');
+
+          TextInput({ placeholder: this.localizedText('connect_hermes_api_token_placeholder', 'Bearer token'), text: this.hermesApiToken })
+            .width('100%')
+            .height(50)
+            .backgroundColor('#F6F7FA')
+            .borderColor('#E5E7EC')
+            .borderWidth(1)
+            .borderRadius(14)
+            .padding({ left: 12, right: 12 })
+            .fontSize(14)
+            .fontColor('#17181C')
+            .type(InputType.Password)
+            .onChange((value: string) => {
+              this.hermesApiToken = value;
+              void this.viewModel.setHermesApiToken(value.trim());
+            });
+        } else {
+          this.SettingToggle(this.localizedText('settings_manual_mode', 'Manual mode'), this.localizedText('settings_manual_mode_desc', 'Use saved host, port, and TLS defaults for connections.'), this.manualEnabled, (value: boolean) => {
+            this.manualEnabled = value;
+            void this.viewModel.setManualEnabled(value);
+          });
+
+          if (this.manualEnabled) {
+            this.DividerLine();
+
+            Text($r('app.string.connect_host'))
+              .fontSize(12)
+              .fontWeight(FontWeight.Medium)
+              .fontColor('#4D5563');
+
+            TextInput({ placeholder: '10.0.2.2', text: this.manualHost })
+              .width('100%')
+              .height(50)
+              .backgroundColor('#F6F7FA')
+              .borderColor('#E5E7EC')
+              .borderWidth(1)
+              .borderRadius(14)
+              .padding({ left: 12, right: 12 })
+              .fontSize(14)
+              .fontColor('#17181C')
+              .onChange((value: string) => {
+                this.manualHost = value;
+                void this.viewModel.setManualHost(value);
+              });
+
+              Text($r('app.string.connect_port'))
+              .fontSize(12)
+              .fontWeight(FontWeight.Medium)
+              .fontColor('#4D5563');
+
+            TextInput({ placeholder: '18789', text: this.manualPort })
+              .width('100%')
+              .height(50)
+              .backgroundColor('#F6F7FA')
+              .borderColor('#E5E7EC')
+              .borderWidth(1)
+              .borderRadius(14)
+              .padding({ left: 12, right: 12 })
+              .fontSize(14)
+              .fontColor('#17181C')
+              .type(InputType.Number)
+              .onChange((value: string) => {
+                this.manualPort = value;
+                void this.viewModel.setManualPort(parseInt(value, 10) || 0);
+              });
+
+            this.SettingToggle(this.localizedText('connect_use_tls', 'Use TLS'), this.localizedText('settings_use_tls_desc', 'Prefer secure websocket (wss) for the manual endpoint.'), this.manualTls, (value: boolean) => {
+              this.manualTls = value;
+              void this.viewModel.setManualTls(value);
+            });
+          }
         }
       }
       .width('100%')
@@ -391,6 +487,22 @@ export struct SettingsPage {
         });
     }
     .width('100%');
+  }
+
+  @Builder GatewayModeItem(label: string, mode: string) {
+    Text(label)
+      .fontSize(13)
+      .fontWeight(FontWeight.Medium)
+      .fontColor(this.gatewayMode === mode ? '#FFFFFF' : '#17181C')
+      .backgroundColor(this.gatewayMode === mode ? '#1D5DD8' : '#F6F7FA')
+      .borderRadius(10)
+      .border({ width: 1, color: this.gatewayMode === mode ? '#184DAF' : '#D6DAE2' })
+      .padding({ left: 12, right: 12, top: 8, bottom: 8 })
+      .margin({ right: 8 })
+      .onClick(() => {
+        this.gatewayMode = mode;
+        void this.viewModel.setGatewayMode(mode);
+      });
   }
 
   @Builder InfoRow(label: string, value: string) {

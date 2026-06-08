@@ -1,7 +1,8 @@
-import { GatewaySession, GatewayConnectOptions } from '../api/GatewaySession';
+import { GatewaySession, GatewayConnectOptions, GatewaySessionLike } from '../api/GatewaySession';
+import { HermesGatewaySession, UnavailableGatewaySession } from '../api/HermesGatewaySession';
 import { deviceAuthStore } from '../api/DeviceAuthStore';
 import { deviceIdentityStore } from '../api/DeviceIdentityStore';
-import { securePrefs, LocationMode } from '../common/SecurePrefs';
+import { securePrefs, LocationMode, GatewayMode, HERMES_DEFAULT_HOST, HERMES_DEFAULT_PORT } from '../common/SecurePrefs';
 import { HarmonyNodeRuntimeFlags, InvokeCommandRegistry } from '../node/InvokeCommandRegistry';
 import { NodeInvokeDispatcher, NodeInvokeDispatcherCallbacks } from '../node/NodeInvokeDispatcher';
 import {
@@ -9,6 +10,10 @@ import {
   ChatMessage,
   ChatSessionEntry,
   ChatPendingToolCall,
+  ChatPendingInteraction,
+  ChatPendingInteractionBackend,
+  ChatPendingInteractionChoice,
+  ChatPendingInteractionInput,
   OutgoingAttachment,
   VoiceConversationEntry,
   ChatMessageContent
@@ -85,6 +90,7 @@ export class MainViewModel {
   chatThinkingLevel: string = 'medium';
   chatStreamingAssistantText: string | null = null;
   chatPendingToolCalls: ChatPendingToolCall[] = [];
+  chatPendingInteractions: ChatPendingInteraction[] = [];
   chatSessions: ChatSessionEntry[] = [];
   pendingRunCount: number = 0;
 
@@ -115,17 +121,22 @@ export class MainViewModel {
   locationPreciseEnabled: boolean = false;
   preventSleep: boolean = false;
   manualEnabled: boolean = false;
-  manualHost: string = '127.0.0.1';
+  manualHost: string = '';
   manualPort: number = 18789;
   manualTls: boolean = false;
+  gatewayMode: string = GatewayMode.Hermes;
+  hermesHost: string = '';
+  hermesPort: number = 0;
+  hermesTls: boolean = true;
+  hermesApiToken: string = '';
   gatewayToken: string = '';
   gatewayBootstrapToken: string = '';
   gatewayPassword: string = '';
   onboardingCompleted: boolean = false;
   canvasDebugStatusEnabled: boolean = false;
 
-  private operatorSession: GatewaySession | null = null;
-  private nodeSession: GatewaySession | null = null;
+  private operatorSession: GatewaySessionLike | null = null;
+  private nodeSession: GatewaySessionLike | null = null;
   private nodeInvokeDispatcher: NodeInvokeDispatcher;
   private connectedEndpoint: GatewayEndpoint | null = null;
   private ready: boolean = false;
@@ -175,7 +186,9 @@ export class MainViewModel {
         return Promise.resolve();
       }
 
-      return viewModel.setManualEnabled(true).then((): Promise<void> => {
+      return viewModel.setGatewayMode(GatewayMode.OpenClaw).then((): Promise<void> => {
+        return viewModel.setManualEnabled(true);
+      }).then((): Promise<void> => {
         return viewModel.setManualHost(trimmedHost);
       }).then((): Promise<void> => {
         return viewModel.setManualPort(viewModel.manualPort);
@@ -190,6 +203,35 @@ export class MainViewModel {
       }).then((): Promise<void> => {
         const endpoint = viewModel.createEndpoint(trimmedHost, viewModel.manualPort, viewModel.manualTls, `${trimmedHost}:${viewModel.manualPort}`);
         return MainViewModel.connectTask(viewModel, endpoint);
+      });
+    });
+  }
+
+  static connectHermesTask(viewModel: MainViewModel): Promise<void> {
+    return Promise.resolve().then((): Promise<void> => {
+      const trimmedHost = MainViewModel.resolveHermesHost(viewModel.hermesHost);
+      const resolvedPort = MainViewModel.resolveHermesPort(viewModel.hermesPort);
+      const trimmedToken = viewModel.hermesApiToken.trim();
+      console.info(
+        'MainViewModel: connectHermes host=' + trimmedHost + ', port=' + resolvedPort + ', tls=' + viewModel.hermesTls
+      );
+      if (resolvedPort < 1 || resolvedPort > 65535 || trimmedToken.length === 0) {
+        console.warn('MainViewModel: connectHermes rejected due to invalid configuration');
+        viewModel.setStatusTextFromResource('common_status_invalid_hermes_config', 'Invalid Hermes gateway configuration');
+        return Promise.resolve();
+      }
+
+      return viewModel.setGatewayMode(GatewayMode.Hermes).then((): Promise<void> => {
+        viewModel.hermesHost = trimmedHost;
+        viewModel.hermesPort = resolvedPort;
+        viewModel.hermesApiToken = trimmedToken;
+        const endpoint = viewModel.createEndpoint(trimmedHost, resolvedPort, viewModel.hermesTls, `${trimmedHost}:${resolvedPort}`);
+        return MainViewModel.connectTask(viewModel, endpoint);
+      }).then((): Promise<void> => {
+        if (!viewModel.isConnected) {
+          return Promise.resolve();
+        }
+        return viewModel.persistHermesConnection(trimmedHost, resolvedPort, viewModel.hermesTls, trimmedToken);
       });
     });
   }
@@ -254,33 +296,7 @@ export class MainViewModel {
     try {
       await this.loadPreferences();
 
-      this.operatorSession = new GatewaySession(deviceIdentityStore, deviceAuthStore);
-      this.nodeSession = new GatewaySession(deviceIdentityStore, deviceAuthStore);
-
-      this.operatorSession.setHandlers({
-        onConnected: (name: string, remote: string, mainSessionKey: string): void => {
-          this.handleConnected(name, remote, mainSessionKey);
-        },
-        onDisconnected: (message: string): void => {
-          this.handleDisconnected(message);
-        },
-        onEvent: (event: string, payloadJson: string): void => {
-          this.handleEvent(event, payloadJson);
-        },
-      });
-
-      this.nodeSession.setHandlers({
-        onConnected: (_name: string, _remote: string, _mainSessionKey: string): void => {
-          this.handleNodeConnected();
-        },
-        onDisconnected: (message: string): void => {
-          this.handleNodeDisconnected(message);
-        },
-        onEvent: (_event: string, _payloadJson: string): void => {},
-        onInvoke: async (request) => {
-          return this.nodeInvokeDispatcher.handleInvoke(request);
-        }
-      });
+      this.configureGatewaySessions();
 
       this.seedMockDiscovery();
       this.startDiscovery();
@@ -305,6 +321,11 @@ export class MainViewModel {
     this.manualHost = await securePrefs.getManualHost();
     this.manualPort = await securePrefs.getManualPort();
     this.manualTls = await securePrefs.getManualTls();
+    this.gatewayMode = await securePrefs.getGatewayMode();
+    this.hermesHost = await securePrefs.getHermesHost();
+    this.hermesPort = await securePrefs.getHermesPort();
+    this.hermesTls = await securePrefs.getHermesTls();
+    this.hermesApiToken = await securePrefs.getHermesApiToken();
     this.gatewayToken = await securePrefs.getGatewayToken();
     this.gatewayBootstrapToken = await securePrefs.getGatewayBootstrapToken();
     this.gatewayPassword = await securePrefs.getGatewayPassword();
@@ -312,10 +333,53 @@ export class MainViewModel {
     this.canvasDebugStatusEnabled = await securePrefs.getCanvasDebugStatusEnabled();
   }
 
+  private configureGatewaySessions(): void {
+    if (this.gatewayMode === GatewayMode.Hermes) {
+      this.operatorSession = new HermesGatewaySession();
+      this.nodeSession = new UnavailableGatewaySession();
+    } else {
+      this.operatorSession = new GatewaySession(deviceIdentityStore, deviceAuthStore);
+      this.nodeSession = new GatewaySession(deviceIdentityStore, deviceAuthStore);
+    }
+
+    this.operatorSession.setHandlers({
+      onConnected: (name: string, remote: string, mainSessionKey: string): void => {
+        this.handleConnected(name, remote, mainSessionKey);
+      },
+      onDisconnected: (message: string): void => {
+        this.handleDisconnected(message);
+      },
+      onEvent: (event: string, payloadJson: string): void => {
+        this.handleEvent(event, payloadJson);
+      },
+    });
+
+    this.nodeSession.setHandlers({
+      onConnected: (_name: string, _remote: string, _mainSessionKey: string): void => {
+        this.handleNodeConnected();
+      },
+      onDisconnected: (message: string): void => {
+        this.handleNodeDisconnected(message);
+      },
+      onEvent: (_event: string, _payloadJson: string): void => {},
+      onInvoke: async (request) => {
+        return this.nodeInvokeDispatcher.handleInvoke(request);
+      }
+    });
+  }
+
   private seedMockDiscovery(): void {
     const endpoints: GatewayEndpoint[] = [];
 
-    if (this.manualHost.trim().length > 0) {
+    if (this.gatewayMode === GatewayMode.Hermes) {
+      const hermesHost = MainViewModel.resolveHermesHost(this.hermesHost);
+      const hermesPort = MainViewModel.resolveHermesPort(this.hermesPort);
+      if (hermesPort >= 1 && hermesPort <= 65535) {
+        endpoints.push(this.createEndpoint(hermesHost, hermesPort, this.hermesTls, 'Hermes Gateway'));
+      }
+    }
+
+    if (this.gatewayMode === GatewayMode.OpenClaw && this.manualHost.trim().length > 0) {
       endpoints.push(this.createEndpoint(this.manualHost, this.manualPort, this.manualTls, this.getLocalizedString('connect_saved_gateway', 'Saved Gateway')));
     }
 
@@ -335,6 +399,22 @@ export class MainViewModel {
     endpoint.name = name;
     endpoint.stableId = `manual|${trimmedHost.toLowerCase()}|${port}|${tlsEnabled ? 'tls' : 'plain'}`;
     return endpoint;
+  }
+
+  private static resolveHermesHost(value: string): string {
+    const trimmedHost = value.trim();
+    return trimmedHost.length > 0 ? trimmedHost : HERMES_DEFAULT_HOST;
+  }
+
+  private static resolveHermesPort(value: number): number {
+    return value > 0 ? value : HERMES_DEFAULT_PORT;
+  }
+
+  private async persistHermesConnection(host: string, port: number, tlsEnabled: boolean, apiToken: string): Promise<void> {
+    await this.setHermesHost(host);
+    await this.setHermesPort(port);
+    await this.setHermesTls(tlsEnabled);
+    await this.setHermesApiToken(apiToken);
   }
 
   private async startDiscovery(): Promise<void> {
@@ -495,6 +575,12 @@ export class MainViewModel {
       case 'chat.session':
         this.handleChatSession(payloadJson);
         break;
+      case 'clarify.request':
+      case 'approval.request':
+      case 'sudo.request':
+      case 'secret.request':
+        this.handlePendingInteractionEvent(event, payloadJson);
+        break;
       case 'canvas.update':
         this.handleCanvasUpdate(payloadJson);
         break;
@@ -532,6 +618,7 @@ export class MainViewModel {
     this.chatError = this.getLocalizedString('chat_error_seq_gap', 'Event stream interrupted, please refresh and try again.');
     this.chatStreamingAssistantText = null;
     this.chatPendingToolCalls = [];
+    this.chatPendingInteractions = [];
     this.clearChatPendingRuns();
     this.notifyChatStateChanged();
   }
@@ -558,6 +645,236 @@ export class MainViewModel {
     } catch (error) {
       console.error('MainViewModel: Parse chat session error:', error);
     }
+  }
+
+  private handlePendingInteractionEvent(event: string, payloadJson: string): void {
+    const eventPayload = this.parseJsonObject(payloadJson);
+    const nestedPayload = this.readNestedObject(eventPayload, 'payload');
+    const payload = Object.keys(nestedPayload).length > 0 ? nestedPayload : eventPayload;
+    const rawSessionKey =
+      this.readOptionalString(eventPayload, 'sessionKey') ||
+      this.readOptionalString(eventPayload, 'session_id') ||
+      this.readOptionalString(payload, 'sessionKey') ||
+      this.readOptionalString(payload, 'session_id');
+    const sessionKey = this.normalizeChatSessionKey(rawSessionKey);
+    if (rawSessionKey.length > 0 && sessionKey !== this.chatSessionKey) {
+      console.info('MainViewModel: pending interaction ignored due to session mismatch, current=' + this.chatSessionKey + ', incoming=' + sessionKey);
+      return;
+    }
+
+    const interaction = new ChatPendingInteraction();
+    interaction.id = this.readOptionalString(payload, 'id') ||
+      this.readOptionalString(payload, 'request_id') ||
+      this.readOptionalString(payload, 'requestId') ||
+      event + '|' + Date.now().toString();
+    interaction.kind = this.mapPendingInteractionKind(event);
+    interaction.title = this.pendingInteractionTitle(interaction.kind);
+    interaction.body = this.pendingInteractionBody(event, payload);
+    interaction.riskLevel = interaction.kind === 'action_approval' ? 'medium' : 'low';
+    interaction.choices = this.pendingInteractionChoices(event, payload);
+    interaction.input = this.pendingInteractionInput(event, payload);
+
+    const backend = new ChatPendingInteractionBackend();
+    backend.method = this.pendingInteractionRespondMethod(event);
+    backend.requestId = this.readOptionalString(payload, 'request_id') || this.readOptionalString(payload, 'requestId');
+    backend.sessionId = rawSessionKey.length > 0 ? sessionKey : this.chatSessionKey;
+    backend.runId = this.readOptionalString(eventPayload, 'run_id') ||
+      this.readOptionalString(eventPayload, 'runId') ||
+      this.readOptionalString(payload, 'run_id') ||
+      this.readOptionalString(payload, 'runId');
+    interaction.backend = backend;
+
+    this.chatPendingInteractions = [interaction];
+    this.notifyChatStateChanged();
+  }
+
+  private mapPendingInteractionKind(event: string): string {
+    switch (event) {
+      case 'clarify.request':
+        return 'clarification';
+      case 'approval.request':
+        return 'action_approval';
+      case 'secret.request':
+        return 'secret_input';
+      case 'sudo.request':
+        return 'handoff_required';
+      default:
+        return 'confirmation';
+    }
+  }
+
+  private pendingInteractionTitle(kind: string): string {
+    switch (kind) {
+      case 'clarification':
+        return this.getLocalizedString('pending_interaction_clarification_title', '需要你选择');
+      case 'action_approval':
+        return this.getLocalizedString('pending_interaction_action_title', '允许执行这个操作？');
+      case 'secret_input':
+        return this.getLocalizedString('pending_interaction_secret_title', '需要输入敏感信息');
+      case 'handoff_required':
+        return this.getLocalizedString('pending_interaction_handoff_title', '需要在桌面端完成');
+      default:
+        return this.getLocalizedString('pending_interaction_confirmation_title', '请确认');
+    }
+  }
+
+  private pendingInteractionBody(event: string, payload: Record<string, Object | string>): string {
+    if (event === 'clarify.request') {
+      return this.readOptionalString(payload, 'question');
+    }
+    if (event === 'approval.request') {
+      const description = this.readOptionalString(payload, 'description');
+      const command = this.readOptionalString(payload, 'command');
+      return description.length > 0 ? description : command;
+    }
+    if (event === 'secret.request') {
+      return this.readOptionalString(payload, 'prompt');
+    }
+    if (event === 'sudo.request') {
+      return this.getLocalizedString('pending_interaction_sudo_body', '这个操作需要在桌面端或开发者环境完成授权，手机端不会要求输入 sudo 密码。');
+    }
+    return this.readOptionalString(payload, 'message');
+  }
+
+  private pendingInteractionChoices(event: string, payload: Record<string, Object | string>): ChatPendingInteractionChoice[] {
+    if (event === 'clarify.request') {
+      const value = payload['choices'];
+      const rawChoices = Array.isArray(value) ? value as Array<Object | string> : [];
+      const choices: ChatPendingInteractionChoice[] = [];
+      for (let i = 0; i < rawChoices.length; i++) {
+        const label = this.pendingInteractionChoiceLabel(rawChoices[i]);
+        if (label.length === 0) {
+          continue;
+        }
+        const choice = new ChatPendingInteractionChoice();
+        choice.id = this.pendingInteractionChoiceId(rawChoices[i], i);
+        choice.label = label;
+        choice.value = this.pendingInteractionChoiceValue(rawChoices[i], label);
+        choice.style = i === 0 ? 'primary' : 'secondary';
+        choices.push(choice);
+      }
+      return choices;
+    }
+    if (event === 'approval.request') {
+      return this.fixedPendingChoices([
+        ['once', this.getLocalizedString('pending_interaction_allow_once', '允许这一次'), 'primary'],
+        ['deny', this.getLocalizedString('pending_interaction_deny', '不允许'), 'danger'],
+      ]);
+    }
+    return this.fixedPendingChoices([
+      ['cancel', this.getLocalizedString('pending_interaction_cancel', '取消'), 'secondary'],
+    ]);
+  }
+
+  private fixedPendingChoices(rows: string[][]): ChatPendingInteractionChoice[] {
+    const choices: ChatPendingInteractionChoice[] = [];
+    for (let i = 0; i < rows.length; i++) {
+      const choice = new ChatPendingInteractionChoice();
+      choice.id = rows[i][0];
+      choice.label = rows[i][1];
+      choice.value = rows[i][0];
+      choice.style = rows[i][2];
+      choices.push(choice);
+    }
+    return choices;
+  }
+
+  private pendingInteractionChoiceLabel(rawChoice: Object | string): string {
+    if (typeof rawChoice === 'string') {
+      return rawChoice.trim();
+    }
+    const source = rawChoice as Record<string, Object | string>;
+    return this.readOptionalString(source, 'label') ||
+      this.readOptionalString(source, 'title') ||
+      this.readOptionalString(source, 'text') ||
+      this.readOptionalString(source, 'value');
+  }
+
+  private pendingInteractionChoiceValue(rawChoice: Object | string, fallback: string): string {
+    if (typeof rawChoice === 'string') {
+      return rawChoice.trim();
+    }
+    const source = rawChoice as Record<string, Object | string>;
+    return this.readOptionalString(source, 'value') ||
+      this.readOptionalString(source, 'id') ||
+      fallback;
+  }
+
+  private pendingInteractionChoiceId(rawChoice: Object | string, index: number): string {
+    if (typeof rawChoice !== 'string') {
+      const source = rawChoice as Record<string, Object | string>;
+      const explicitId = this.readOptionalString(source, 'id');
+      if (explicitId.length > 0) {
+        return explicitId;
+      }
+    }
+    return 'choice_' + String(index + 1);
+  }
+
+  private pendingInteractionInput(event: string, payload: Record<string, Object | string>): ChatPendingInteractionInput | null {
+    if (event !== 'secret.request') {
+      return null;
+    }
+    const input = new ChatPendingInteractionInput();
+    input.type = 'secure';
+    input.placeholder = this.readOptionalString(payload, 'env_var');
+    return input;
+  }
+
+  private pendingInteractionRespondMethod(event: string): string {
+    switch (event) {
+      case 'clarify.request':
+        return 'clarify.respond';
+      case 'approval.request':
+        return 'approval.respond';
+      case 'secret.request':
+        return 'secret.respond';
+      case 'sudo.request':
+        return 'handoff_required';
+      default:
+        return 'confirm.respond';
+    }
+  }
+
+  respondPendingInteraction(interaction: ChatPendingInteraction, value: string): void {
+    if (!this.operatorSession || interaction.status !== 'pending') {
+      return;
+    }
+    if (interaction.kind === 'handoff_required') {
+      this.chatPendingInteractions = this.chatPendingInteractions.filter((item: ChatPendingInteraction): boolean => item.id !== interaction.id);
+      this.notifyChatStateChanged();
+      return;
+    }
+    const params: Record<string, string> = {};
+    if (interaction.backend.requestId.length > 0) {
+      params['request_id'] = interaction.backend.requestId;
+    }
+    if (interaction.backend.sessionId.length > 0) {
+      params['session_id'] = interaction.backend.sessionId;
+    }
+    if (interaction.backend.runId.length > 0) {
+      params['run_id'] = interaction.backend.runId;
+    }
+    if (interaction.kind === 'clarification') {
+      params['answer'] = value;
+    } else if (interaction.kind === 'action_approval') {
+      params['choice'] = value;
+    } else {
+      params['value'] = value;
+    }
+    interaction.status = 'submitting';
+    this.notifyChatStateChanged();
+    this.operatorSession.request(interaction.backend.method, JSON.stringify(params)).then((response) => {
+      if (!response.result.success) {
+        throw new Error(response.error?.message || 'Interaction response failed.');
+      }
+      this.chatPendingInteractions = this.chatPendingInteractions.filter((item: ChatPendingInteraction): boolean => item.id !== interaction.id);
+      this.notifyChatStateChanged();
+    }).catch((error: Error) => {
+      interaction.status = 'pending';
+      this.chatError = error instanceof Error ? error.message : 'Interaction response failed.';
+      this.notifyChatStateChanged();
+    });
   }
 
   private handleChatEvent(payloadJson: string): void {
@@ -607,6 +924,7 @@ export class MainViewModel {
 
       this.chatStreamingAssistantText = null;
       this.chatPendingToolCalls = [];
+      this.chatPendingInteractions = [];
       this.fetchChatSessions(50);
       this.notifyChatStateChanged();
       return;
@@ -676,6 +994,7 @@ export class MainViewModel {
       this.chatError = errorMessage.length > 0 ? errorMessage : this.getLocalizedString('chat_error_seq_gap', 'Event stream interrupted, please refresh and try again.');
       this.chatStreamingAssistantText = null;
       this.chatPendingToolCalls = [];
+      this.chatPendingInteractions = [];
       this.clearChatPendingRuns();
       this.notifyChatStateChanged();
       return;
@@ -732,18 +1051,21 @@ export class MainViewModel {
       this.setStatusTextFromResource('common_status_connecting', 'Connecting…');
       this.notifyConnectionStateChanged();
 
+      const authToken = this.gatewayMode === GatewayMode.Hermes ? this.hermesApiToken : this.gatewayToken;
+      const bootstrapToken = this.gatewayMode === GatewayMode.Hermes ? '' : this.gatewayBootstrapToken;
+      const password = this.gatewayMode === GatewayMode.Hermes ? '' : this.gatewayPassword;
       const operatorConnect = this.operatorSession.connect(
         endpoint,
-        this.gatewayToken,
-        this.gatewayBootstrapToken,
-        this.gatewayPassword,
+        authToken,
+        bootstrapToken,
+        password,
         this.createOperatorConnectOptions()
       );
       const nodeConnect = this.nodeSession.connect(
         endpoint,
-        this.gatewayToken,
-        this.gatewayBootstrapToken,
-        this.gatewayPassword,
+        authToken,
+        bootstrapToken,
+        password,
         this.createNodeConnectOptions()
       );
       return Promise.all([operatorConnect, nodeConnect]).then((): void => {
@@ -790,7 +1112,38 @@ export class MainViewModel {
       }
 
       const endpoint = this.createEndpoint(trimmedHost, this.manualPort, this.manualTls, `${trimmedHost}:${this.manualPort}`);
-      return this.connect(endpoint);
+      return this.setGatewayMode(GatewayMode.OpenClaw).then((): Promise<void> => {
+        return this.connect(endpoint);
+      });
+    });
+  }
+
+  connectHermes(): Promise<void> {
+    return this.waitUntilReady().then((): Promise<void> => {
+      const trimmedHost = MainViewModel.resolveHermesHost(this.hermesHost);
+      const resolvedPort = MainViewModel.resolveHermesPort(this.hermesPort);
+      const trimmedToken = this.hermesApiToken.trim();
+      console.info(
+        'MainViewModel: connectHermes host=' + trimmedHost + ', port=' + resolvedPort + ', tls=' + this.hermesTls
+      );
+      if (resolvedPort < 1 || resolvedPort > 65535 || trimmedToken.length === 0) {
+        console.warn('MainViewModel: connectHermes rejected due to invalid configuration');
+        this.setStatusTextFromResource('common_status_invalid_hermes_config', 'Invalid Hermes gateway configuration');
+        return Promise.resolve();
+      }
+
+      this.hermesHost = trimmedHost;
+      this.hermesPort = resolvedPort;
+      this.hermesApiToken = trimmedToken;
+      const endpoint = this.createEndpoint(trimmedHost, resolvedPort, this.hermesTls, `${trimmedHost}:${resolvedPort}`);
+      return this.setGatewayMode(GatewayMode.Hermes).then((): Promise<void> => {
+        return this.connect(endpoint);
+      }).then((): Promise<void> => {
+        if (!this.isConnected) {
+          return Promise.resolve();
+        }
+        return this.persistHermesConnection(trimmedHost, resolvedPort, this.hermesTls, trimmedToken);
+      });
     });
   }
 
@@ -1196,6 +1549,59 @@ export class MainViewModel {
     this.seedMockDiscovery();
   }
 
+  async setGatewayMode(value: string): Promise<void> {
+    const nextMode = value === GatewayMode.OpenClaw ? GatewayMode.OpenClaw : GatewayMode.Hermes;
+    const changed = this.gatewayMode !== nextMode;
+    if (changed) {
+      if (this.operatorSession) {
+        await this.operatorSession.disconnect();
+      }
+      if (this.nodeSession) {
+        await this.nodeSession.disconnect();
+      }
+      this.isConnected = false;
+      this.isNodeConnected = false;
+      this.connectedEndpoint = null;
+      this.chatHealthOk = false;
+      this.chatStreamingAssistantText = null;
+      this.chatPendingToolCalls = [];
+      this.chatPendingInteractions = [];
+      this.clearChatPendingRuns();
+    }
+    this.gatewayMode = nextMode;
+    await securePrefs.setGatewayMode(nextMode);
+    if (changed) {
+      this.configureGatewaySessions();
+      this.setStatusTextFromResource('common_status_disconnected', 'Disconnected');
+      this.notifyConnectionStateChanged();
+      this.notifyChatStateChanged();
+    }
+    this.seedMockDiscovery();
+  }
+
+  async setHermesHost(value: string): Promise<void> {
+    this.hermesHost = value;
+    await securePrefs.setHermesHost(value);
+    this.seedMockDiscovery();
+  }
+
+  async setHermesPort(value: number): Promise<void> {
+    this.hermesPort = value;
+    await securePrefs.setHermesPort(value);
+    this.seedMockDiscovery();
+  }
+
+  async setHermesTls(value: boolean): Promise<void> {
+    this.hermesTls = value;
+    await securePrefs.setHermesTls(value);
+    this.seedMockDiscovery();
+  }
+
+  async setHermesApiToken(value: string): Promise<void> {
+    this.hermesApiToken = value;
+    await securePrefs.setHermesApiToken(value);
+  }
+
   async setGatewayToken(value: string): Promise<void> {
     this.gatewayToken = value;
     await securePrefs.setGatewayToken(value);
@@ -1285,6 +1691,7 @@ export class MainViewModel {
   abortChat(): void {
     if (!this.operatorSession || this.chatPendingRunIds.length === 0) {
       this.chatStreamingAssistantText = null;
+      this.chatPendingInteractions = [];
       this.clearChatPendingRuns();
       this.notifyChatStateChanged();
       return;
@@ -1301,7 +1708,7 @@ export class MainViewModel {
     }
   }
 
-  sendChat(message: string, thinking: string, attachments: OutgoingAttachment[], sessionKey?: string): void {
+  sendChat(message: string, thinking: string, attachments: OutgoingAttachment[], displayMessage?: string): void {
     const trimmedMessage = message.trim();
     if (trimmedMessage.length === 0 && attachments.length === 0) {
       return;
@@ -1320,7 +1727,8 @@ export class MainViewModel {
     userMessage.stableKey = 'local|' + String(now) + '|' + this.createChatRunId();
     userMessage.role = 'user';
     const outgoingText = trimmedMessage.length > 0 ? trimmedMessage : this.getLocalizedString('chat_see_attached', 'See attached.');
-    userMessage.content = [this.createTextContent(outgoingText)];
+    const visibleText = displayMessage && displayMessage.trim().length > 0 ? displayMessage.trim() : outgoingText;
+    userMessage.content = [this.createTextContent(visibleText)];
     // 带附件时，为每张图片构建本地缩略图 content block（data URL）
     if (attachments.length > 0) {
       for (let attachment of attachments) {
@@ -1334,12 +1742,13 @@ export class MainViewModel {
     this.chatMessages = [...this.chatMessages, userMessage];
     this.chatStreamingAssistantText = null;
     this.chatPendingToolCalls = [];
+    this.chatPendingInteractions = [];
 
     const runId = this.createChatRunId();
     this.addChatPendingRun(runId);
 
     const requestParams = new ChatSendRequestParams();
-    requestParams.sessionKey = sessionKey ?? this.chatSessionKey;
+    requestParams.sessionKey = this.chatSessionKey;
     requestParams.message = outgoingText;
     requestParams.thinking = this.chatThinkingLevel;
     requestParams.idempotencyKey = runId;
@@ -1425,6 +1834,7 @@ export class MainViewModel {
     this.chatHealthOk = false;
     this.chatStreamingAssistantText = null;
     this.chatPendingToolCalls = [];
+    this.chatPendingInteractions = [];
     this.chatPendingRunIds = [];
     this.pendingRunCount = 0;
     this.chatSessionId = null;
@@ -1921,6 +2331,7 @@ export class MainViewModel {
       this.clearChatPendingRun(runId);
       this.chatStreamingAssistantText = null;
       this.chatPendingToolCalls = [];
+      this.chatPendingInteractions = [];
       this.chatError = this.getLocalizedString('chat_error_pending_timeout', 'Reply timed out, please retry or refresh.');
       this.notifyChatStateChanged();
     }, this.chatPendingRunTimeoutMs);
@@ -2062,6 +2473,9 @@ export class MainViewModel {
         break;
       case 'common_status_invalid_manual_config':
         this.statusText = this.getLocalizedString('common_status_invalid_manual_config', 'Invalid manual gateway configuration');
+        break;
+      case 'common_status_invalid_hermes_config':
+        this.statusText = this.getLocalizedString('common_status_invalid_hermes_config', 'Invalid Hermes gateway configuration');
         break;
       case 'common_status_missing_setup_code':
         this.statusText = this.getLocalizedString('common_status_missing_setup_code', 'Missing setup code');

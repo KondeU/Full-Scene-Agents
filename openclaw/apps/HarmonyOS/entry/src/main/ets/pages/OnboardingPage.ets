@@ -1,5 +1,5 @@
 import { MainViewModel } from '../viewmodel/MainViewModel';
-import { LocationMode } from '../common/SecurePrefs';
+import { GatewayMode, LocationMode, HERMES_DEFAULT_HOST, HERMES_DEFAULT_PORT } from '../common/SecurePrefs';
 
 const C_BG_TOP: string = '#FFFFFF';
 const C_BG_MID: string = '#F7F8FA';
@@ -26,12 +26,13 @@ export struct OnboardingPage {
   onComplete: () => void = () => {};
 
   @State currentStep: number = 1;
+  @State gatewayMode: string = GatewayMode.Hermes;
   @State setupCode: string = '';
   @State gatewayToken: string = '';
   @State gatewayPassword: string = '';
-  @State inputMode: string = 'Manual';
-  @State advancedOpen: boolean = true;
-  @State manualHost: string = '127.0.0.1';
+  @State inputMode: string = 'SetupCode';
+  @State advancedOpen: boolean = false;
+  @State manualHost: string = '10.0.2.2';
   @State manualPort: string = '18789';
   @State manualTls: boolean = false;
   @State gatewayError: string = '';
@@ -58,10 +59,20 @@ export struct OnboardingPage {
   private connectionStateListenerId: number = -1;
 
   aboutToAppear(): void {
-    this.manualHost = this.viewModel.manualHost || '127.0.0.1';
-    this.manualPort = this.viewModel.manualPort > 0 ? this.viewModel.manualPort.toString() : '18789';
-    this.manualTls = this.viewModel.manualTls;
-    this.gatewayToken = this.viewModel.gatewayToken || '';
+    this.gatewayMode = this.viewModel.gatewayMode || GatewayMode.Hermes;
+    if (this.gatewayMode === GatewayMode.Hermes) {
+      this.inputMode = 'Manual';
+      this.advancedOpen = true;
+      this.manualHost = this.viewModel.hermesHost || '';
+      this.manualPort = this.viewModel.hermesPort > 0 ? this.viewModel.hermesPort.toString() : '';
+      this.manualTls = this.viewModel.hermesTls;
+      this.gatewayToken = this.viewModel.hermesApiToken || '';
+    } else {
+      this.manualHost = this.viewModel.manualHost || '';
+      this.manualPort = this.viewModel.manualPort > 0 ? this.viewModel.manualPort.toString() : '18789';
+      this.manualTls = this.viewModel.manualTls;
+      this.gatewayToken = this.viewModel.gatewayToken || '';
+    }
     this.gatewayPassword = this.viewModel.gatewayPassword || '';
     this.enableCamera = this.viewModel.cameraEnabled;
     this.enableLocation = this.viewModel.locationMode !== 'off';
@@ -75,6 +86,7 @@ export struct OnboardingPage {
     this.enableSms = false;
 
     if (
+      this.gatewayMode === GatewayMode.Hermes ||
       this.viewModel.manualEnabled ||
       this.viewModel.manualHost.trim().length > 0 ||
       this.viewModel.gatewayToken.trim().length > 0 ||
@@ -122,13 +134,19 @@ export struct OnboardingPage {
       }
       return `openclaw://${code}`;
     }
-    const scheme = this.manualTls ? 'wss' : 'ws';
-    const host = this.manualHost.trim();
-    const port = this.manualPort.trim();
-    return host.length > 0 && port.length > 0 ? `${scheme}://${host}:${port}` : '';
+    const scheme = this.gatewayMode === GatewayMode.Hermes
+      ? (this.manualTls ? 'https' : 'http')
+      : (this.manualTls ? 'wss' : 'ws');
+    const host = this.gatewayMode === GatewayMode.Hermes ? this.resolveHermesHost(this.manualHost) : this.manualHost.trim();
+    const port = this.gatewayMode === GatewayMode.Hermes ? this.resolveHermesPortText(this.manualPort) : this.manualPort.trim();
+    const path = this.gatewayMode === GatewayMode.Hermes ? '/v1/chat/completions' : '';
+    return host.length > 0 && port.length > 0 ? `${scheme}://${host}:${port}${path}` : '';
   }
 
   private methodLabel(): string {
+    if (this.gatewayMode === GatewayMode.Hermes) {
+      return this.localizedText('connect_gateway_type_hermes', 'Hermes');
+    }
     return this.inputMode === 'SetupCode'
       ? this.localizedText('onboarding_mode_setup_code', 'Setup Code')
       : this.localizedText('onboarding_mode_manual', 'Manual');
@@ -236,41 +254,45 @@ export struct OnboardingPage {
     Column({ space: 12 }) {
       this.SectionHeader(this.localizedText('onboarding_gateway_header', 'Gateway Connection'));
 
-      Row() {
-        Row()
-          .width(2)
-          .height('100%')
-          .backgroundColor('#661D5DD8');
-        Column({ space: 8 }) {
-          Text(this.localizedText('onboarding_setup_instructions', 'Setup instructions'))
-            .fontSize(15)
-            .fontWeight(FontWeight.Medium)
-            .fontColor(C_TEXT);
-          Text(this.localizedText('onboarding_run_on_gateway_host', 'Run these on the gateway host:'))
-            .fontSize(14)
-            .fontWeight(FontWeight.Medium)
-            .fontColor(C_TEXT_SEC);
-          this.CommandBlock('openclaw qr --setup-code-only');
-          this.CommandBlock('openclaw qr --json');
+      if (this.gatewayMode === GatewayMode.OpenClaw) {
+        Row() {
+          Row()
+            .width(2)
+            .height('100%')
+            .backgroundColor('#661D5DD8');
+          Column({ space: 8 }) {
+            Text(this.localizedText('onboarding_setup_instructions', 'Setup instructions'))
+              .fontSize(15)
+              .fontWeight(FontWeight.Medium)
+              .fontColor(C_TEXT);
+            Text(this.localizedText('onboarding_run_on_gateway_host', 'Run these on the gateway host:'))
+              .fontSize(14)
+              .fontWeight(FontWeight.Medium)
+              .fontColor(C_TEXT_SEC);
+            this.CommandBlock('openclaw qr --setup-code-only');
+            this.CommandBlock('openclaw qr --json');
+          }
+          .alignItems(HorizontalAlign.Start)
+          .layoutWeight(1)
+          .padding({ left: 12 });
         }
-        .alignItems(HorizontalAlign.Start)
-        .layoutWeight(1)
-        .padding({ left: 12 });
+        .width('100%')
+        .alignItems(VerticalAlign.Top);
       }
-      .width('100%')
-      .alignItems(VerticalAlign.Top);
 
-      Row() {
-        this.ModeChip(this.localizedText('onboarding_mode_setup_code', 'Setup Code'), 'SetupCode', () => {
-          this.inputMode = 'SetupCode';
-          this.gatewayError = '';
-        });
-        this.ModeChip(this.localizedText('onboarding_mode_manual', 'Manual'), 'Manual', () => {
-          this.inputMode = 'Manual';
-          this.gatewayError = '';
-        });
+      if (this.gatewayMode === GatewayMode.OpenClaw) {
+        Row() {
+          this.ModeChip(this.localizedText('onboarding_mode_setup_code', 'Setup Code'), this.inputMode === 'SetupCode', () => {
+            this.inputMode = 'SetupCode';
+            this.gatewayError = '';
+          });
+          this.ModeChip(this.localizedText('onboarding_mode_manual', 'Manual'), this.inputMode === 'Manual', () => {
+            this.inputMode = 'Manual';
+            this.gatewayError = '';
+          });
+        }
+        .width('100%');
       }
-      .width('100%');
 
       if (this.inputMode === 'SetupCode') {
         Text(this.localizedText('onboarding_setup_code_label', 'SETUP CODE'))
@@ -294,27 +316,29 @@ export struct OnboardingPage {
             this.gatewayError = '';
           });
       } else {
-        Row() {
-          this.QuickFillChip(this.localizedText('onboarding_quickfill_emulator', 'HarmonyOS Emulator'), () => {
-            this.manualHost = '10.0.2.2';
-            this.manualPort = '18789';
-            this.manualTls = false;
-            this.gatewayError = '';
-            void this.viewModel.setManualEnabled(true);
-            void this.viewModel.setManualHost(this.manualHost);
-            void this.viewModel.setManualPort(18789);
-            void this.viewModel.setManualTls(false);
-          });
-          this.QuickFillChip(this.localizedText('onboarding_quickfill_localhost', 'Localhost'), () => {
-            this.manualHost = '127.0.0.1';
-            this.manualPort = '18789';
-            this.manualTls = false;
-            this.gatewayError = '';
-            void this.viewModel.setManualEnabled(true);
-            void this.viewModel.setManualHost(this.manualHost);
-            void this.viewModel.setManualPort(18789);
-            void this.viewModel.setManualTls(false);
-          });
+        if (this.gatewayMode === GatewayMode.OpenClaw) {
+          Row() {
+            this.QuickFillChip(this.localizedText('onboarding_quickfill_emulator', 'HarmonyOS Emulator'), () => {
+              this.manualHost = '10.0.2.2';
+              this.manualPort = '18789';
+              this.manualTls = false;
+              this.gatewayError = '';
+              void this.viewModel.setManualEnabled(true);
+              void this.viewModel.setManualHost(this.manualHost);
+              void this.viewModel.setManualPort(18789);
+              void this.viewModel.setManualTls(false);
+            });
+            this.QuickFillChip(this.localizedText('onboarding_quickfill_localhost', 'Localhost'), () => {
+              this.manualHost = '127.0.0.1';
+              this.manualPort = '18789';
+              this.manualTls = false;
+              this.gatewayError = '';
+              void this.viewModel.setManualEnabled(true);
+              void this.viewModel.setManualHost(this.manualHost);
+              void this.viewModel.setManualPort(18789);
+              void this.viewModel.setManualTls(false);
+            });
+          }
         }
 
         Text(this.localizedText('onboarding_host_label', 'HOST'))
@@ -322,7 +346,7 @@ export struct OnboardingPage {
           .fontWeight(FontWeight.Medium)
           .fontColor(C_TEXT_SEC)
           .letterSpacing(0.9);
-        TextInput({ placeholder: '127.0.0.1', text: this.manualHost })
+        TextInput({ placeholder: this.gatewayMode === GatewayMode.Hermes ? HERMES_DEFAULT_HOST : '10.0.2.2', text: this.manualHost })
           .width('100%')
           .height(50)
           .backgroundColor(C_SURFACE)
@@ -335,8 +359,12 @@ export struct OnboardingPage {
           .onChange((value: string) => {
             this.manualHost = value;
             this.gatewayError = '';
-            void this.viewModel.setManualEnabled(true);
-            void this.viewModel.setManualHost(value.trim());
+            if (this.gatewayMode === GatewayMode.Hermes) {
+              this.viewModel.hermesHost = value.trim();
+            } else {
+              void this.viewModel.setManualEnabled(true);
+              void this.viewModel.setManualHost(value.trim());
+            }
           });
 
         Text(this.localizedText('onboarding_port_label', 'PORT'))
@@ -344,7 +372,7 @@ export struct OnboardingPage {
           .fontWeight(FontWeight.Medium)
           .fontColor(C_TEXT_SEC)
           .letterSpacing(0.9);
-        TextInput({ placeholder: '18789', text: this.manualPort })
+        TextInput({ placeholder: this.gatewayMode === GatewayMode.Hermes ? HERMES_DEFAULT_PORT.toString() : '18789', text: this.manualPort })
           .width('100%')
           .height(50)
           .backgroundColor(C_SURFACE)
@@ -360,15 +388,21 @@ export struct OnboardingPage {
             this.gatewayError = '';
             const parsedPort = parseInt(value.trim(), 10);
             if (!Number.isNaN(parsedPort) && parsedPort >= 1 && parsedPort <= 65535) {
-              void this.viewModel.setManualEnabled(true);
-              void this.viewModel.setManualPort(parsedPort);
+              if (this.gatewayMode === GatewayMode.Hermes) {
+                this.viewModel.hermesPort = parsedPort;
+              } else {
+                void this.viewModel.setManualEnabled(true);
+                void this.viewModel.setManualPort(parsedPort);
+              }
+            } else if (this.gatewayMode === GatewayMode.Hermes && value.trim().length === 0) {
+              this.viewModel.hermesPort = 0;
             }
           });
 
         Row() {
           Column({ space: 2 }) {
             Text(this.localizedText('onboarding_use_tls', 'Use TLS')).fontSize(15).fontWeight(FontWeight.Medium).fontColor(C_TEXT);
-            Text(this.localizedText('onboarding_use_tls_desc', 'Switch to secure websocket (wss).')).fontSize(13).fontWeight(FontWeight.Medium).fontColor(C_TEXT_SEC);
+            Text(this.gatewayMode === GatewayMode.Hermes ? this.localizedText('connect_hermes_tls_desc', 'Use HTTPS for Hermes gateway requests.') : this.localizedText('onboarding_use_tls_desc', 'Switch to secure websocket (wss).')).fontSize(13).fontWeight(FontWeight.Medium).fontColor(C_TEXT_SEC);
           }
           .alignItems(HorizontalAlign.Start)
           .layoutWeight(1);
@@ -378,8 +412,12 @@ export struct OnboardingPage {
             .onChange((isOn: boolean) => {
               this.manualTls = isOn;
               this.gatewayError = '';
-              void this.viewModel.setManualEnabled(true);
-              void this.viewModel.setManualTls(isOn);
+              if (this.gatewayMode === GatewayMode.Hermes) {
+                void this.viewModel.setHermesTls(isOn);
+              } else {
+                void this.viewModel.setManualEnabled(true);
+                void this.viewModel.setManualTls(isOn);
+              }
             });
         }
         .width('100%');
@@ -397,12 +435,12 @@ export struct OnboardingPage {
 
         if (this.advancedOpen) {
           Column({ space: 10 }) {
-            Text(this.localizedText('onboarding_token_optional', 'TOKEN (OPTIONAL)'))
+            Text(this.gatewayMode === GatewayMode.Hermes ? this.localizedText('connect_hermes_api_token', 'API token') : this.localizedText('onboarding_token_optional', 'TOKEN (OPTIONAL)'))
               .fontSize(11)
               .fontWeight(FontWeight.Medium)
               .fontColor(C_TEXT_SEC)
               .letterSpacing(0.9);
-            TextInput({ placeholder: this.localizedText('onboarding_token_placeholder', 'token'), text: this.gatewayToken })
+            TextInput({ placeholder: this.gatewayMode === GatewayMode.Hermes ? this.localizedText('connect_hermes_api_token_placeholder', 'Bearer token') : this.localizedText('onboarding_token_placeholder', 'token'), text: this.gatewayToken })
               .width('100%')
               .height(50)
               .backgroundColor(C_SURFACE)
@@ -415,36 +453,42 @@ export struct OnboardingPage {
               .type(InputType.Password)
               .onChange((value: string) => {
                 this.gatewayToken = value;
-                void this.viewModel.setGatewayToken(value.trim());
+                if (this.gatewayMode === GatewayMode.Hermes) {
+                  this.viewModel.hermesApiToken = value.trim();
+                } else {
+                  void this.viewModel.setGatewayToken(value.trim());
+                }
               });
 
-            Text(this.localizedText('onboarding_password_optional', 'PASSWORD (OPTIONAL)'))
-              .fontSize(11)
-              .fontWeight(FontWeight.Medium)
-              .fontColor(C_TEXT_SEC)
-              .letterSpacing(0.9);
-            TextInput({ placeholder: this.localizedText('onboarding_password_placeholder', 'password'), text: this.gatewayPassword })
-              .width('100%')
-              .height(50)
-              .backgroundColor(C_SURFACE)
-              .borderColor(C_BORDER)
-              .borderWidth(1)
-              .borderRadius(12)
-              .padding({ left: 12, right: 12 })
-              .fontSize(14)
-              .fontColor(C_TEXT)
-              .type(InputType.Password)
-              .onChange((value: string) => {
-                this.gatewayPassword = value;
-                void this.viewModel.setGatewayPassword(value.trim());
-              });
+            if (this.gatewayMode === GatewayMode.OpenClaw) {
+              Text(this.localizedText('onboarding_password_optional', 'PASSWORD (OPTIONAL)'))
+                .fontSize(11)
+                .fontWeight(FontWeight.Medium)
+                .fontColor(C_TEXT_SEC)
+                .letterSpacing(0.9);
+              TextInput({ placeholder: this.localizedText('onboarding_password_placeholder', 'password'), text: this.gatewayPassword })
+                .width('100%')
+                .height(50)
+                .backgroundColor(C_SURFACE)
+                .borderColor(C_BORDER)
+                .borderWidth(1)
+                .borderRadius(12)
+                .padding({ left: 12, right: 12 })
+                .fontSize(14)
+                .fontColor(C_TEXT)
+                .type(InputType.Password)
+                .onChange((value: string) => {
+                  this.gatewayPassword = value;
+                  void this.viewModel.setGatewayPassword(value.trim());
+                });
+            }
           }
           .width('100%');
         }
       }
 
       if (this.resolvedGatewayDisplay().length > 0) {
-        this.ResolvedEndpoint();
+        this.ResolvedEndpoint(this.resolvedGatewayDisplay());
       }
 
       if (this.gatewayError.length > 0) {
@@ -547,7 +591,7 @@ export struct OnboardingPage {
             .fontWeight(FontWeight.Medium)
             .fontColor(C_SUCCESS)
             .margin({ top: 4 });
-        } else {
+        } else if (this.gatewayMode === GatewayMode.OpenClaw) {
           Row() {
             Row()
               .width(2)
@@ -724,17 +768,14 @@ export struct OnboardingPage {
     .padding({ bottom: 8 });
   }
 
-  @Builder ModeChip(label: string, mode: string, onClick: () => void) {
+  @Builder ModeChip(label: string, active: boolean, onClick: () => void) {
     Button({ type: ButtonType.Normal }) {
-      Text(label)
-        .fontSize(13)
-        .fontWeight(FontWeight.Bold)
-        .fontColor(this.inputMode === mode ? '#FFFFFF' : C_TEXT);
+      Text(label).fontSize(13).fontWeight(FontWeight.Bold).fontColor(active ? '#FFFFFF' : C_TEXT);
     }
     .height(40)
     .borderRadius(12)
-    .backgroundColor(this.inputMode === mode ? C_ACCENT : C_SURFACE)
-    .border({ width: 1, color: this.inputMode === mode ? '#184DAF' : C_BORDER_STRONG })
+    .backgroundColor(active ? C_ACCENT : C_SURFACE)
+    .border({ width: 1, color: active ? '#184DAF' : C_BORDER_STRONG })
     .padding({ left: 16, right: 16 })
     .margin({ right: 8 })
     .onClick(() => {
@@ -756,7 +797,7 @@ export struct OnboardingPage {
     });
   }
 
-  @Builder ResolvedEndpoint() {
+  @Builder ResolvedEndpoint(endpoint: string) {
     Column() {
       Divider().color(C_BORDER);
       Text(this.localizedText('onboarding_resolved_endpoint', 'RESOLVED ENDPOINT'))
@@ -765,7 +806,7 @@ export struct OnboardingPage {
         .fontColor(C_TEXT_SEC)
         .letterSpacing(0.7)
         .margin({ top: 8, bottom: 4 });
-      Text(this.resolvedGatewayDisplay())
+      Text(endpoint)
         .fontSize(14)
         .fontWeight(FontWeight.Medium)
         .fontColor(C_TEXT);
@@ -802,10 +843,14 @@ export struct OnboardingPage {
         return;
       }
     } else {
-      const host = this.manualHost.trim();
-      const parsedPort = parseInt(this.manualPort.trim(), 10);
+      const host = this.gatewayMode === GatewayMode.Hermes ? this.resolveHermesHost(this.manualHost) : this.manualHost.trim();
+      const parsedPort = this.gatewayMode === GatewayMode.Hermes ? this.resolveHermesPort(this.manualPort) : parseInt(this.manualPort.trim(), 10);
       if (host.length === 0 || Number.isNaN(parsedPort) || parsedPort < 1 || parsedPort > 65535) {
         this.gatewayError = this.localizedText('onboarding_error_valid_host_port', 'Please enter a valid host and port.');
+        return;
+      }
+      if (this.gatewayMode === GatewayMode.Hermes && this.gatewayToken.trim().length === 0) {
+        this.gatewayError = this.localizedText('connect_validation_hermes_config', 'Enter a valid Hermes host, port, and API token.');
         return;
       }
     }
@@ -856,8 +901,8 @@ export struct OnboardingPage {
       return;
     }
 
-    const host = this.manualHost.trim();
-    const parsedPort = parseInt(this.manualPort.trim(), 10);
+    const host = this.gatewayMode === GatewayMode.Hermes ? this.resolveHermesHost(this.manualHost) : this.manualHost.trim();
+    const parsedPort = this.gatewayMode === GatewayMode.Hermes ? this.resolveHermesPort(this.manualPort) : parseInt(this.manualPort.trim(), 10);
     console.info(
       'OnboardingPage: manual connect submit, host=' + host + ', port=' + parsedPort + ', tls=' + this.manualTls
     );
@@ -865,6 +910,34 @@ export struct OnboardingPage {
       console.warn('OnboardingPage: invalid manual gateway input');
       this.gatewayError = this.localizedText('onboarding_error_enter_valid_manual_host_port', 'Enter a valid manual host and port.');
       this.isConnecting = false;
+      return;
+    }
+
+    if (this.gatewayMode === GatewayMode.Hermes) {
+      this.viewModel.hermesHost = host;
+      this.viewModel.hermesPort = parsedPort;
+      this.viewModel.hermesTls = this.manualTls;
+      this.viewModel.hermesApiToken = this.gatewayToken.trim();
+
+      MainViewModel.connectHermesTask(this.viewModel)
+        .then(() => {
+          console.info('OnboardingPage: Hermes connect finished, connected=' + this.viewModel.isConnected + ', status=' + this.viewModel.statusText);
+          if (this.viewModel.isConnected) {
+            this.manualHost = this.viewModel.hermesHost;
+            this.manualPort = this.viewModel.hermesPort > 0 ? this.viewModel.hermesPort.toString() : '';
+            this.gatewayToken = this.viewModel.hermesApiToken;
+          } else if (!this.canFinishOnboarding()) {
+            this.gatewayError = this.viewModel.statusText || this.localizedText('onboarding_error_connection_failed_check_settings', 'Connection failed. Check your settings and try again.');
+          }
+        })
+        .catch((error: Error) => {
+          console.error('OnboardingPage: attemptConnection error:', error);
+          this.gatewayError = this.localizedText('onboarding_error_connection_retry', 'Connection error. Please try again.');
+        })
+        .finally(() => {
+          console.info('OnboardingPage: attemptConnection end, connected=' + this.viewModel.isConnected + ', error=' + this.gatewayError);
+          this.isConnecting = false;
+        });
       return;
     }
 
@@ -946,6 +1019,24 @@ export struct OnboardingPage {
       .replaceAll('{value}', this.gatewayStatusText());
   }
 
+  private resolveHermesHost(value: string): string {
+    const host = value.trim();
+    return host.length > 0 ? host : HERMES_DEFAULT_HOST;
+  }
+
+  private resolveHermesPort(value: string): number {
+    const port = value.trim();
+    if (port.length === 0) {
+      return HERMES_DEFAULT_PORT;
+    }
+    return parseInt(port, 10);
+  }
+
+  private resolveHermesPortText(value: string): string {
+    const port = value.trim();
+    return port.length > 0 ? port : HERMES_DEFAULT_PORT.toString();
+  }
+
   private connectedToText(): string {
     const target = this.serverNameState || this.remoteAddressState || this.localizedText('onboarding_gateway_fallback', 'gateway');
     return this.localizedText('onboarding_connected_to', 'Connected to {target}')
@@ -953,6 +1044,9 @@ export struct OnboardingPage {
   }
 
   private canFinishOnboarding(): boolean {
+    if (this.gatewayMode === GatewayMode.Hermes) {
+      return this.connectedState;
+    }
     return this.connectedState && this.nodeConnectedState;
   }
 
