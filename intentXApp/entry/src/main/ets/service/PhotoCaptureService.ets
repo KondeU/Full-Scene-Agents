@@ -120,12 +120,20 @@ export class PhotoCaptureService {
         // P0-02: 前置校验文件大小
         if (stat.size <= 0) {
           console.error('PhotoCaptureService: file is empty, uri=' + photoResult.uri);
+          AppStorage.setOrCreate<string>('shareReceiveStatus', 'fail');
+          AppStorage.setOrCreate<string>('shareReceiveError', 'Image file is empty.');
           return;
         }
         // P1-01: 安全上限检查，防止 OOM（仅拒绝 > 20MB 的极端文件）
         if (stat.size > MAX_FILE_SIZE_BYTES) {
           console.error(
             'PhotoCaptureService: file too large for safety (' + stat.size + ' bytes), max=' + MAX_FILE_SIZE_BYTES
+          );
+          AppStorage.setOrCreate<string>('shareReceiveStatus', 'fail');
+          AppStorage.setOrCreate<string>(
+            'shareReceiveError',
+            'Image is too large (' + Math.round(stat.size / 1048576) +
+            ' MB). Maximum is 20 MB.'
           );
           return;
         }
@@ -142,6 +150,11 @@ export class PhotoCaptureService {
           console.error(
             'PhotoCaptureService: compressed file still too large (' + finalBuffer.byteLength +
             ' bytes), cannot send'
+          );
+          AppStorage.setOrCreate<string>('shareReceiveStatus', 'fail');
+          AppStorage.setOrCreate<string>(
+            'shareReceiveError',
+            'Image could not be compressed enough. Please try a smaller image.'
           );
           return;
         }
@@ -161,10 +174,33 @@ export class PhotoCaptureService {
         attachment.content = base64;
 
         // 发送到专用的 ImportImage 会话，避免主对话被心跳刷屏
-        mainViewModel.sendChat('/ImageData', 'off', [attachment], 'ImportImage');
+        const SHARE_TAG = '[Share2Agent]';
         console.info(
-          'PhotoCaptureService: photo sent to ImportImage session, finalSize=' + finalBuffer.byteLength +
-          ' bytes, wasCompressed=' + wasCompressed
+          SHARE_TAG + ' about to sendChat: isConnected=' + mainViewModel.isConnected +
+          ', chatSessionKey=' + mainViewModel.chatSessionKey +
+          ', prevError=' + (mainViewModel.chatError || '(none)')
+        );
+        const prevError = mainViewModel.chatError;
+        // sessionKey='ImportImage' — 发到专用会话，避免主对话被心跳刷屏
+        mainViewModel.sendChat('/ImageData', 'off', [attachment], undefined, 'ImportImage');
+        // sendChat 内部若检测到 isConnected==false，会设置 chatError 并 return
+        const sendFailed = (mainViewModel.chatError !== null && mainViewModel.chatError !== prevError);
+        if (sendFailed) {
+          AppStorage.setOrCreate<string>('shareReceiveStatus', 'fail');
+          AppStorage.setOrCreate<string>(
+            'shareReceiveError',
+            'Not connected to Gateway. Please open IntentX App, go to Connect tab, and ensure it is connected before sharing.'
+          );
+          console.warn(
+            SHARE_TAG + ' sendChat FAILED: isConnected=' + mainViewModel.isConnected +
+            ', chatError=' + mainViewModel.chatError
+          );
+        } else {
+          AppStorage.setOrCreate<string>('shareReceiveStatus', 'success');
+        }
+        console.info(
+          SHARE_TAG + ' done: finalSize=' + finalBuffer.byteLength +
+          ' bytes, wasCompressed=' + wasCompressed + ', sendOk=' + !sendFailed
         );
       } finally {
         // P0-01: 无论 read/encode 是否异常，fd 必须关闭
@@ -176,7 +212,25 @@ export class PhotoCaptureService {
         'PhotoCaptureService: obtainPhotoToProcess error, code=' + bizErr.code +
         ', msg=' + bizErr.message
       );
+      AppStorage.setOrCreate<string>('shareReceiveStatus', 'fail');
+      AppStorage.setOrCreate<string>(
+        'shareReceiveError',
+        'Failed to process image: ' + (bizErr.message || 'Unknown error.')
+      );
     }
+  }
+
+  /**
+   * 从外部 URI 处理图片（系统分享等入口）。
+   * 构造 PhotoResult 后委托给 obtainPhotoToProcess 完成后续管线。
+   *
+   * @param uri 图片文件 URI
+   */
+  processSharedUri(uri: string): void {
+    const photoResult = new PhotoResult();
+    photoResult.uri = uri;
+    photoResult.displayName = this.extractDisplayName(uri);
+    this.obtainPhotoToProcess(photoResult);
   }
 
   /**

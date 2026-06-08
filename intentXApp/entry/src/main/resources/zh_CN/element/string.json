@@ -621,6 +621,10 @@
       "value": "提醒"
     },
     {
+      "name": "share_extension_label",
+      "value": "IntentX Agent"
+    },
+    {
       "name": "voice_header_eyebrow",
       "value": "语音"
     },
