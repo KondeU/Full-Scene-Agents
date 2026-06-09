@@ -625,6 +625,10 @@
       "value": "IntentX Agent"
     },
     {
+      "name": "notification_permission_reason",
+      "value": "用于在通知栏显示Agent推送的通知"
+    },
+    {
       "name": "voice_header_eyebrow",
       "value": "语音"
     },
