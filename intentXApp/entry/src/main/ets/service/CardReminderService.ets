@@ -11,6 +11,7 @@ export class ReminderCardContent {
   body: string = '';
   note: string = '';
   imageUrl: string = '';
+  style: string = '';   // '' | 'infoShowTitleBodyNoteImage' | 'infoShowTitleImageAndImport'
 }
 
 export class CardReminderService {
@@ -54,6 +55,7 @@ export class CardReminderService {
     console.info('CardReminderService: update ' +
       'title=' + content.title + ' body=' + content.body +
       ' note=' + content.note + ' imageUrl=' + content.imageUrl +
+      ' style=' + content.style +
       ' hasImage=' + (content.imageUrl.length > 0) +
       ' formIdsCount=' + this.formIds.length);
 
@@ -78,6 +80,7 @@ export class CardReminderService {
       content.body = (p['body'] || '').trim();
       content.note = (p['note'] || '').trim();
       content.imageUrl = (p['imageUrl'] || '').trim();
+      content.style = (p['style'] || '').trim();
       if (content.body.length === 0) return InvokeResult.error('INVALID_PARAMS', 'body is required');
       this.updateReminderCard(content);
       return InvokeResult.ok(JSON.stringify({ ok: true, formIdsCount: this.formIds.length }));
@@ -195,7 +198,8 @@ export class CardReminderService {
       'title': this.currentContent.title,
       'body': this.currentContent.body,
       'note': this.currentContent.note,
-      'hasImage': hasImg ? 'true' : 'false'
+      'hasImage': hasImg ? 'true' : 'false',
+      'style': this.currentContent.style.length > 0 ? this.currentContent.style : 'infoShowTitleBodyNoteImage'
     };
     if (hasImg) {
       try {

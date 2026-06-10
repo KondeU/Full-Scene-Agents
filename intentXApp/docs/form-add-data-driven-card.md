@@ -6,8 +6,10 @@
 
 ## 一、需求摘要
 
-1. **桌面卡片（Form Kit）**：左右分栏布局，左边三行文字（标题、正文、备注），右边可选一张图；若无图则文字区自动扩展占满整行宽度
-2. **`updateReminderCard` 接口**：刷新卡片上的提醒内容；既作为本地 API 接口，又作为 Claw node invoke command（`card.reminder.update`），可被智能体通过 Gateway 调用
+1. **桌面卡片（Form Kit）**：支持两种渲染风格——
+   - `infoShowTitleBodyNoteImage`（默认）：左右分栏布局，左边三行文字（标题、正文、备注），右边可选一张图；若无图则文字区自动扩展占满整行宽度
+   - `infoShowTitleImageAndImport`（新增）：全幅背景图铺满卡片，右侧两个半透明操作按钮引导用户拍照/选图导入
+2. **`updateReminderCard` 接口**：刷新卡片上的提醒内容；既作为本地 API 接口，又作为 Claw node invoke command（`card.reminder.update`），可被智能体通过 Gateway 调用。Agent 通过 `style` 参数实时选择渲染哪种卡片风格
 3. **默认卡片内容**："当前无主动提醒"
 4. **调试 Tab 页面**：新增"调试"tab（index=6），用于调试卡片内容推送、invoke command 响应、后续也可以复用给其他新增能力的调试
 5. **最小侵入**：优先新增文件，对现有代码改动仅限于必要的位置
@@ -62,7 +64,8 @@ HarmonyOS 的 **Form Kit**（也叫"卡片"或"服务卡片"）是系统级的�
 | **修改** | `InvokeCommandRegistry.ets` | 新增 `card.reminder.update` command spec | +3 行 |
 | **修改** | `OpenClawProtocolConstants.ets` | 新增 `OpenClawCardCommand` enum | +5 行 |
 | **修改** | `NodeInvokeDispatcher.ets` | 新增 card command 处理分支 | +5 行 |
-| **修改** | `EntryAbility.ets` | onFormEvent 处理卡片路由事件 | +5 行 |
+| **修改** | `EntryAbility.ets` | onNewWant 处理卡片路由（targetPage + importAction） | +12 行 |
+| **修改** | `ImportPage.ets` | aboutToAppear 读取 importAction 自动触发拍照/相册 | +8 行 |
 | **修改** | 3 × `string.json` | 新增国际化 key（卡片+调试） | ~25 条/文件 |
 
 **不改动**：`GatewaySession.ets`、`GatewayModels.ets`、`SecurePrefs.ets`、所有已有 Page（除 PostOnboardingTabs）、`DeviceAuthStore`、`DeviceIdentityStore`
@@ -78,7 +81,7 @@ HarmonyOS 的 **Form Kit**（也叫"卡片"或"服务卡片"）是系统级的�
 │                    Gateway (远程)                                │
 │   AI 智能体 → node.invoke.request                               │
 │   command: "card.reminder.update"                               │
-│   paramsJson: { title, body, note?, imageUrl? }                 │
+│   paramsJson: { style?, title, body, note?, imageUrl? }         │
 └───────────────────────────┬─────────────────────────────────────┘
                             │ WebSocket
                             ▼
@@ -94,8 +97,9 @@ HarmonyOS 的 **Form Kit**（也叫"卡片"或"服务卡片"）是系统级的�
 │          FormExtension (独立卡片进程)                             │
 │   ReminderFormExtension.onUpdate()                              │
 │   → ReminderCardWidget 读取 formBindingData                     │
-│   → 渲染: 左文字(title+body+note) 右可选图(imageUrl)            │
-│   → 无图时文字区占满宽度                                         │
+│   → 根据 style 字段选择渲染模式:                                 │
+│     • infoShowTitleBodyNoteImage: 左文字+右可选图（默认）        │
+│     • infoShowTitleImageAndImport: 全幅背景图+右侧导入按钮       │
 └─────────────────────────────────────────────────────────────────┘
 
                     ┌─────────────────┐
@@ -156,6 +160,7 @@ export class ReminderCardContent {
   body: string = '';
   note: string = '';
   imageUrl: string = '';
+  style: string = '';   // 'infoShowTitleBodyNoteImage' | 'infoShowTitleImageAndImport'
 }
 
 export class CardReminderService {
@@ -229,8 +234,13 @@ export class CardReminderService {
       content.body = (parsed['body'] || '').trim();
       content.note = (parsed['note'] || '').trim();
       content.imageUrl = (parsed['imageUrl'] || '').trim();
+      content.style = (parsed['style'] || '').trim();
       if (content.body.length === 0) {
         return InvokeResult.error('INVALID_PARAMS', 'body is required');
+      }
+      // style=infoShowTitleImageAndImport 时 imageUrl 也是必填
+      if (content.style === 'infoShowTitleImageAndImport' && content.imageUrl.length === 0) {
+        return InvokeResult.error('INVALID_PARAMS', 'imageUrl is required for style infoShowTitleImageAndImport');
       }
       this.updateReminderCard(content);
       return InvokeResult.ok(JSON.stringify({ ok: true, formIdsCount: this.formIds.length }));
@@ -330,7 +340,8 @@ export class CardReminderService {
       'title': this.currentContent.title,
       'body': this.currentContent.body,
       'note': this.currentContent.note,
-      'hasImage': hasImg ? 'true' : 'false'
+      'hasImage': hasImg ? 'true' : 'false',
+      'style': this.currentContent.style.length > 0 ? this.currentContent.style : 'infoShowTitleBodyNoteImage'
     };
 
     if (hasImg) {
@@ -415,11 +426,11 @@ export default class ReminderFormExtension extends FormExtension {
 
 ---
 
-### 5.3 `form/pages/ReminderCardWidget.ets` — 卡片 UI
+### 5.3 `widget/pages/ReminderCardWidget.ets` — 卡片 UI（双风格）
 
-**定位**：ArkTS 卡片声明式 UI。左右分栏，条件渲染图片和备注行。
+**定位**：ArkTS 卡片声明式 UI。通过 `style` 字段在两种渲染模式间切换。
 
-**目录路径**：`entry/src/main/ets/form/pages/ReminderCardWidget.ets`
+**目录路径**：`entry/src/main/ets/widget/pages/ReminderCardWidget.ets`
 
 **卡片支持尺寸**：2×2（标准小卡片）和 2×4（横宽卡片）。
 
@@ -434,45 +445,126 @@ struct ReminderCardWidget {
   @LocalStorageProp('note') note: string = '';
   @LocalStorageProp('imgSrc') imgSrc: string = '';
   @LocalStorageProp('hasImage') hasImageStr: string = 'false';
+  @LocalStorageProp('style') style: string = 'infoShowTitleBodyNoteImage';
 
   build() {
+    if (this.style === 'infoShowTitleImageAndImport') {
+      this.ImageImportLayout();
+    } else {
+      this.InfoShowLayout();
+    }
+  }
+
+  // ── 风格 A: infoShowTitleBodyNoteImage（信息展示卡，默认）──
+  @Builder InfoShowLayout() {
     Row() {
       Column() {
         if (this.title.length > 0) {
           Text(this.title)
-            .fontSize(14).fontWeight(FontWeight.Bold).fontColor('#17181C')
-            .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis });
+            .fontSize(14).fontWeight(400).fontColor('#99000000')
+            .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+            .margin({ bottom: 10 });
         }
 
         Text(this.body)
-          .fontSize(12).fontWeight(FontWeight.Medium).fontColor('#4D5563')
-          .maxLines(this.hasImageStr === 'true' ? 3 : 5)
+          .fontSize(17).fontWeight(500).fontColor('#E5000000')
+          .maxLines(3).lineHeight(22)
           .textOverflow({ overflow: TextOverflow.Ellipsis });
 
         if (this.note.length > 0) {
           Text(this.note)
-            .fontSize(10).fontWeight(FontWeight.Normal).fontColor('#8A92A2')
-            .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis });
+            .fontSize(14).fontWeight(400).fontColor('#99000000')
+            .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+            .margin({ top: 10 });
         }
       }
       .layoutWeight(this.hasImageStr === 'true' ? 1 : 0)
-      .width(this.hasImageStr === 'true' ? '60%' : '100%')
-      .justifyContent(FlexAlign.Start).alignItems(HorizontalAlign.Start)
-      .padding({ left: 12, right: 4, top: 10, bottom: 10 });
+      .width(this.hasImageStr === 'true' ? undefined : '100%')
+      .alignItems(HorizontalAlign.Start).justifyContent(FlexAlign.Center)
+      .padding({ left: 14, right: this.hasImageStr === 'true' ? 10 : 14, top: 14, bottom: 14 });
 
       if (this.hasImageStr === 'true') {
-        // imgSrc 引用 formImages 中的 key（如 'reminderImg'），框架自动通过 fd 读取图片数据
-        Image(this.imgSrc)
-          .width('38%').height('100%').objectFit(ImageFit.Cover)
-          .borderRadius(8).margin({ right: 12 }).alt($r('app.media.icon'));
+        Image('memory://' + this.imgSrc)
+          .width(132).height(120)
+          .objectFit(ImageFit.Cover)
+          .borderRadius(12)
+          .margin({ right: 14 })
+          .alt($r('app.media.icon'));
       }
     }
+    .alignItems(VerticalAlign.Center)
     .width('100%').height('100%')
-    .backgroundColor('#F0F4FA').borderRadius(16)
+    .backgroundColor('#FFFFFF')
+    .borderRadius(16)
     .onClick(() => {
       postCardAction(this, {
         action: 'router', abilityName: 'EntryAbility',
-        params: { targetPage: 'debug' }
+        params: { targetPage: 'import' }
+      });
+    });
+  }
+
+  // ── 风格 B: infoShowTitleImageAndImport（图片导入卡）──
+  @Builder ImageImportLayout() {
+    Stack() {
+      // 底层：全幅背景图
+      if (this.hasImageStr === 'true') {
+        Image('memory://' + this.imgSrc)
+          .width('100%').height('100%')
+          .objectFit(ImageFit.Cover)
+          .borderRadius(16)
+          .alt($r('app.media.icon'));
+      }
+
+      // 上层：右侧两个半透明操作按钮（Stack + Row + Blank 定位，安全兼容 Form 组件限制）
+      Row() {
+        Blank()
+        Column({ space: 8 }) {
+          // "拍一拍" 按钮 → 跳转到导入页并自动触发拍照
+          Column() {
+            Text('拍一拍')
+              .fontSize(11).fontWeight(FontWeight.Medium).fontColor('#1D5DD8')
+          }
+          .width(48).height(48)
+          .borderRadius(12)
+          .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
+          .backgroundColor('rgba(236,243,255,0.70)')
+          .border({ width: 1, color: 'rgba(213,226,250,0.70)' })
+          .onClick(() => {
+            postCardAction(this, {
+              action: 'router', abilityName: 'EntryAbility',
+              params: { targetPage: 'import', importAction: 'camera' }
+            });
+          });
+
+          // "选一选" 按钮 → 跳转到导入页并自动触发相册
+          Column() {
+            Text('选一选')
+              .fontSize(11).fontWeight(FontWeight.Medium).fontColor('#1D5DD8')
+          }
+          .width(48).height(48)
+          .borderRadius(12)
+          .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
+          .backgroundColor('rgba(236,243,255,0.70)')
+          .border({ width: 1, color: 'rgba(213,226,250,0.70)' })
+          .onClick(() => {
+            postCardAction(this, {
+              action: 'router', abilityName: 'EntryAbility',
+              params: { targetPage: 'import', importAction: 'gallery' }
+            });
+          });
+        }
+        .margin({ right: 14 })
+      }
+      .width('100%').height('100%')
+      .alignItems(VerticalAlign.Center)
+    }
+    .width('100%').height('100%')
+    .borderRadius(16)
+    .onClick(() => {
+      postCardAction(this, {
+        action: 'router', abilityName: 'EntryAbility',
+        params: { targetPage: 'import' }
       });
     });
   }
@@ -481,29 +573,29 @@ struct ReminderCardWidget {
 
 **关键设计解析**：
 
-1. **左右分栏**：使用 `Row` 作为顶层容器。文字区 `Column` 在左，可选 `Image` 在右。
+1. **风格切换**：`build()` 中根据 `this.style` 值选择渲染 `InfoShowLayout()` 或 `ImageImportLayout()`。`style` 不传或为未知值时走默认的 `InfoShowLayout`。
 
-2. **无图时文字扩展**：当 `hasImage === 'false'`：
-   - 文字区 `layoutWeight(0)` + `width('100%')` → 占满整行
-   - `body` 的 `maxLines` 从 3 变为 5 → 更多文字可见
-   - 右侧 `Image` 不渲染（条件 `if (this.hasImage === 'true')` 不满足）
+2. **InfoShowLayout（信息展示卡）**：
+   - **左右分栏**：使用 `Row` 作为顶层容器。文字区 `Column` 在左，可选 `Image` 在右。
+   - **无图时文字扩展**：当 `hasImageStr === 'false'`：文字区 `layoutWeight(0)` + `width('100%')` → 占满整行，正文最多 3 行。右侧 `Image` 不渲染。
+   - **有图时文字压缩**：当 `hasImageStr === 'true'`：文字区 `layoutWeight(1)` 自适应，右侧 `Image` 占 132×120vp。正文最多 3 行。
+   - **标题行可选**：`if (this.title.length > 0)` 控制。默认内容没有标题，只显示 body。
+   - **备注行可选**：`if (this.note.length > 0)` 控制。无备注时不占空间。
+   - **备注行可选**：`if (this.note.length > 0)` 控制第三行是否渲染。无备注时不占空间。
+   - **点击跳转**：整卡点击路由到 `EntryAbility`，传递 `targetPage: 'import'`。
 
-3. **有图时文字压缩**：当 `hasImage === 'true'`：
-   - 文字区 `layoutWeight(1)` + `width('60%')` → 占 60% 宽度
-   - `body` 的 `maxLines` 为 3 → 适配较窄空间
-   - 右侧 `Image` 占 `width('38%')` → 占 38% 宽度，留 2% 间隙
+3. **ImageImportLayout（图片导入卡）**：
+   - **全幅背景图**：`Image` 占满卡片 100% 宽高，`ImageFit.Cover` 填充，圆角 16vp 跟随卡片圆角。
+   - **半透明按钮**：右侧垂直居中排列两个 48×48vp 正方形按钮，间距 8vp。背景 `rgba(236,243,255,0.70)` 半透明浅蓝，边框 `rgba(213,226,250,0.70)`，与 ImportPage 的拍照/相册按钮颜色同源。按钮间距卡片右边缘 14vp。
+   - **"拍一拍" 按钮**：点击路由到 `EntryAbility`，携带 `importAction: 'camera'` 参数。ImportPage 收到后自动触发拍照导入。
+   - **"选一选" 按钮**：点击路由到 `EntryAbility`，携带 `importAction: 'gallery'` 参数。ImportPage 收到后自动触发相册导入。
+   - **整卡点击**：点击背景图区域路由到 `EntryAbility`，传递 `targetPage: 'import'`（无 importAction，仅跳转）。
 
-4. **备注行可选**：`if (this.hasNote === 'true')` 控制第三行是否渲染。无备注时不占空间。
+4. **图片传递机制**：Widget 卡片不支持直接加载 HTTP URL。CardReminderService 先将图片下载到沙箱临时目录，然后通过 `formBindingData` 的 `formImages: { reminderImg: fd }` 以文件描述符形式传递给卡片进程。卡片中 `Image('memory://' + this.imgSrc)` 通过 key 引用该 fd。`alt($r('app.media.icon'))` 作为下载失败/无图片时的兜底图标。
 
-5. **标题行可选**：`if (this.title.length > 0)` 控制第一行。默认内容没有标题，只显示 body。
+5. **资源清理**：`CardReminderService` 通过 `currentImagePath` 追踪当前图片路径。每次推送新图片前调用 `cleanupImageFile()` 删除旧文件。`updateForm` 调用完成后 Form Kit 框架接管 fd 生命周期。
 
-6. **图片传递机制**：Widget 卡片不支持直接加载 HTTP URL。CardReminderService 先将图片下载到沙箱临时目录，然后通过 `formBindingData` 的 `formImages: { reminderImg: fd }` 以文件描述符形式传递给卡片进程。卡片中 `Image('reminderImg')` 通过 key 引用该 fd。`alt($r('app.media.icon'))` 作为下载失败/无图片时的兜底图标。
-
-7. **资源清理**：`CardReminderService` 通过 `currentImagePath` 追踪当前图片路径。每次推送新图片前调用 `cleanupImageFile()` 删除旧文件，避免磁盘空间泄漏。`updateForm` 调用完成后 Form Kit 框架接管 fd 生命周期，Service 端无需手动关闭。
-
-8. **点击跳转**：`postCardAction` 使用 `router` 模式跳转到 `EntryAbility`，传递 `targetPage: 'debug'` 参数。
-
-9. **为什么用 `hasImage`/`hasNote` 布爾字符串？** ArkTS 卡片受限环境中部分字符串属性访问可能有兼容性差异，使用 `hasImage` 布尔标记字符串更可靠，是 HarmonyOS 官方推荐的实践。
+6. **为什么用字符串判断风格？** ArkTS 卡片受限环境中不支持复杂类型，`style` 作为字符串通过 LocalStorage 传递，与现有的 `hasImage` 布尔字符串模式一致，是 HarmonyOS 官方推荐的实践。
 
 ---
 
@@ -1112,7 +1204,7 @@ export struct DebugPage {
 
 **说明**：invoke command 的处理逻辑封装在 `CardReminderService` 中，NodeInvokeDispatcher 只做路由转发，保持与现有 canvas/device command 处理的架构一致性。
 
-### 6.8 `EntryAbility.ets` — onFormEvent 处理卡片路由
+### 6.8 `EntryAbility.ets` — onFormEvent / onNewWant 处理卡片路由
 
 ```diff
   onForeground(): void {
@@ -1121,12 +1213,49 @@ export struct DebugPage {
     mainViewModel.refreshLocalizedUiState();
   }
 
-+ onFormEvent(formId: string, message: string): void {
-+   hilog.info(DOMAIN, TAG, 'onFormEvent, formId=' + formId + ', message=' + message);
++ onNewWant(want: Want, launchParam: AbilityConstant.LaunchParam): void {
++   hilog.info(DOMAIN, TAG, 'onNewWant');
++   const targetPage = want.parameters?.['targetPage'] as string || '';
++   const importAction = want.parameters?.['importAction'] as string || '';
++   if (targetPage === 'import') {
++     // 传递到 AppStorage，PostOnboardingTabs 读取后切换到 import tab
++     AppStorage.setOrCreate<string>('pendingTargetTab', 'import');
++     if (importAction.length > 0) {
++       // 传递导入动作给 ImportPage：'camera' 或 'gallery'
++       AppStorage.setOrCreate<string>('pendingImportAction', importAction);
++     }
++   }
 + }
 ```
 
-**说明**：当用户点击桌面卡片时，`postCardAction` 发出的 router 事件会触发 `EntryAbility.onFormEvent`。当前仅打日志。后续可扩展为解析 message 中的 `targetPage` 参数并切换到对应 Tab。
+**说明**：
+1. **卡片点击路由**：桌面卡片中的 `postCardAction` router 事件会触发 `EntryAbility.onNewWant()`（非 `onFormEvent`）。当 Want 参数包含 `targetPage: 'import'` 时，通过 AppStorage 传递目标 Tab 给 `PostOnboardingTabs`。
+2. **导入动作转发（事件通道）**：采用 `importActionSeq`（自增序号）+ `pendingImportAction`（动作类型）双字段模式：
+   - EntryAbility 每次收到卡片按钮点击时递增 `importActionSeq` 并写入 `pendingImportAction`
+   - ImportPage 通过 `@StorageLink('importActionSeq') @Watch('onImportTrigger')` 监听序号变化
+   - 自增序号保证每次点击都是唯一事件，即使连续两次点击同一按钮也能正确响应
+   - **不依赖** `aboutToAppear` 生命周期 mount/unmount 时序
+3. **ImportPage 响应逻辑**：
+```typescript
+// ImportPage — @StorageLink + @Watch 响应式事件监听
+@StorageLink('importActionSeq') @Watch('onImportTrigger') importActionSeq: number = 0;
+
+private onImportTrigger(): void {
+  if (this.importActionSeq <= 0) return;  // 跳过初始空同步
+  const action = AppStorage.get<string>('pendingImportAction') || '';
+  if (action === 'camera') this.handleCapturePhoto();
+  else if (action === 'gallery') this.handlePickFromAlbum();
+}
+```
+4. **EntryAbility 事件生产**：
+```typescript
+// EntryAbility.applyTargetTab()
+if (importAction.length > 0) {
+  const seq = (AppStorage.get<number>('importActionSeq') ?? 0) + 1;
+  AppStorage.setOrCreate<number>('importActionSeq', seq);      // 递增序号 → 触发 @Watch
+  AppStorage.setOrCreate<string>('pendingImportAction', importAction); // 动作类型
+}
+```
 
 ---
 
@@ -1208,6 +1337,8 @@ export struct DebugPage {
 | 国际化 | `localizedText(name, fallback)` + `@StorageProp localeVersion` | ✅ |
 | Form Kit 模式 | FormExtension + formProvider + ArkTS 卡片 | ✅ 遵循官方规范 |
 | 卡片尺寸 | 2×2/2×4 标准尺寸 | ✅ |
+| 卡片风格切换 | `style` 字符串字段通过 formBindingData 传递，Widget 条件渲染 | ✅ 新增 `infoShowTitleImageAndImport` 风格 |
+| 卡片→主应用路由 | `postCardAction` router → `EntryAbility.onNewWant` → AppStorage | ✅ `targetPage` + `importAction` 双参数 |
 
 ---
 
@@ -1221,12 +1352,21 @@ export struct DebugPage {
 
 ```json
 {
-  "title": "会议提醒",          // 可选，标题行
+  "style": "infoShowTitleBodyNoteImage",  // 可选，卡片风格（不传时默认识别）
+  "title": "会议提醒",          // 可选，标题行（infoShowTitleImageAndImport 风格下忽略）
   "body": "下午 3:00 产品评审会议，会议室 A304",  // 必填，正文行
-  "note": "请提前准备演示材料",   // 可选，备注行
-  "imageUrl": "https://example.com/chart.png"  // 可选，右侧图片 URL
+  "note": "请提前准备演示材料",   // 可选，备注行（infoShowTitleImageAndImport 风格下忽略）
+  "imageUrl": "https://example.com/chart.png"  // 可选。有图时根据 style 做不同渲染；infoShowTitleImageAndImport 下无图时只显示 body 文字（上部左对齐）
 }
 ```
+
+**`style` 参数说明**：
+
+| style 值 | 卡片行为 |
+|----------|---------|
+| `infoShowTitleBodyNoteImage` | 默认风格。左文字(title+body+note) + 右缩略图(imageUrl 可选) |
+| `infoShowTitleImageAndImport` | 图片导入风格。全幅背景图(body 必填 + imageUrl 必填)，右侧两个半透明按钮引导拍照/选图 |
+| 不传或未知值 | 按默认 `infoShowTitleBodyNoteImage` 处理 |
 
 **返回 JSON 结构**（成功）：
 
@@ -1251,7 +1391,9 @@ export struct DebugPage {
 
 **验证规则**：
 - `body` 必填，不可为空字符串
-- `title`、`note`、`imageUrl` 均可选
+- `style` 可选，有效值为 `infoShowTitleBodyNoteImage`、`infoShowTitleImageAndImport`
+- `style` 为 `infoShowTitleImageAndImport` 时：有 `imageUrl` 则全幅铺满+右侧按钮，无 `imageUrl` 则只显示 body 文字（上部左对齐）
+- `title`、`note` 在 `infoShowTitleBodyNoteImage` 风格下可选，在 `infoShowTitleImageAndImport` 风格下忽略
 - `imageUrl` 若提供必须是合法的 HTTP/HTTPS URL
 - 所有字段最大长度：title 50 字符，body 200 字符，note 80 字符
 
@@ -1274,37 +1416,47 @@ export struct DebugPage {
 → Gateway → 智能体收到成功响应
 ```
 
+**style=infoShowTitleImageAndImport 调用示例**：
+
+```
+智能体 → Gateway → node.invoke.request
+{
+  "command": "card.reminder.update",
+  "paramsJson": "{\"style\":\"infoShowTitleImageAndImport\",\"body\":\"今天的健康餐推荐\",\"imageUrl\":\"https://example.com/meal.jpg\"}"
+}
+→ HarmonyOS NodeSession 接收
+→ NodeInvokeDispatcher 路由到 CardReminderService.handleUpdateReminderCommand()
+→ 解析 style=infoShowTitleImageAndImport → 校验 imageUrl 必填
+→ 下载图片 → 推送到桌面卡片
+→ 卡片以全幅背景图 + 右侧"拍一拍""选一选"按钮渲染
+→ 返回 InvokeResult.ok({"ok":true,"formIdsCount":1})
+```
+
 ---
 
 ## 十、后续对接与扩展方向
 
-### 10.1 卡片点击路由扩展
+### 10.1 卡片点击路由（已实现）
 
-当前卡片点击通过 `postCardAction` 发送 `router` 事件到 `EntryAbility`。后续可以扩展 `EntryAbility.onFormEvent` 解析 message 中的 `targetPage` 参数，自动切换到指定 Tab：
+卡片点击通过 `postCardAction` 发送 `router` 事件到 `EntryAbility.onNewWant()`，解析 `targetPage` 和 `importAction` 参数：
 
-```typescript
-// 未来可扩展
-onFormEvent(formId: string, message: string): void {
-  try {
-    const params = JSON.parse(message) as Record<string, string>;
-    const target = params['targetPage'];
-    if (target === 'debug') {
-      // 通过 AppStorage 传递目标 Tab，PostOnboardingTabs 在 aboutToAppear 中读取并切换
-      AppStorage.setOrCreate<number>('pendingActiveTab', 6);
-    }
-  } catch (_) {
-    hilog.info(DOMAIN, TAG, 'onFormEvent message not parseable: ' + message);
-  }
-}
-```
+- `targetPage: 'import'` → 切换到 ImportPage
+- `importAction: 'camera'` → ImportPage 自动触发拍照导入
+- `importAction: 'gallery'` → ImportPage 自动触发相册导入
 
-### 10.2 更多卡片尺寸
+详见 6.8 节 EntryAbility 相关修改。
+
+### 10.2 更多卡片风格
+
+当前支持两种 style，未来可扩展更多风格，只需在 `ReminderCardWidget.ets` 的 `build()` 中新增风格分支，并在 `$style` 参数中定义新值即可。Agent 通过 Gateway 实时选择风格，无需用户手动切换卡片类型。
+
+### 10.3 更多卡片尺寸
 
 当前支持 2×2 和 2×4。后续如需 4×4 大卡片，只需：
 1. `form_config.json` 中 `supportDimensions` 添加 `"4*4"`
 2. `ReminderCardWidget.ets` 中根据尺寸调整布局比例（通过 `LOCAL_DIMENSION` 状态变量）
 
-### 10.3 更多 Card Command
+### 10.4 更多 Card Command
 
 当前只有 `card.reminder.update`。后续可扩展：
 - `card.reminder.clear` — 清除提醒，恢复默认内容

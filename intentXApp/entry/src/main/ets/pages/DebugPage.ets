@@ -13,6 +13,7 @@ export struct DebugPage {
   @State debugBody: string = '';
   @State debugNote: string = '';
   @State debugImageUrl: string = '';
+  @State debugStyle: string = 'infoShowTitleBodyNoteImage';
   @State locDesiredAccuracy: string = 'precise';
   @State locTimeoutMs: string = '10000';
   @State pushResult: string = '';
@@ -78,6 +79,22 @@ export struct DebugPage {
         TextInput({ placeholder: this.localizedText('debug_push_image_placeholder', 'Image URL (optional)'), text: this.debugImageUrl })
           .fontSize(14).onChange((v: string) => { this.debugImageUrl = v; });
 
+        Row({ space: 8 }) {
+          Text('Style:').fontSize(13).fontWeight(FontWeight.Medium).fontColor('#4D5563');
+
+          Select([
+            { value: 'infoShowTitleBodyNoteImage' },
+            { value: 'infoShowTitleImageAndImport' }
+          ])
+            .selected(this.debugStyle === 'infoShowTitleBodyNoteImage' ? 0 : 1)
+            .value(this.debugStyle)
+            .font({ size: 13 })
+            .fontColor('#17181C')
+            .onSelect((index: number) => {
+              this.debugStyle = index === 0 ? 'infoShowTitleBodyNoteImage' : 'infoShowTitleImageAndImport';
+            });
+        }
+
         Row({ space: 12 }) {
           Button(this.localizedText('debug_push_button', 'Push to Card'))
             .type(ButtonType.Normal).backgroundColor('#C8841A').fontColor('#FFFFFF')
@@ -138,9 +155,10 @@ export struct DebugPage {
     content.body = this.debugBody.trim();
     content.note = this.debugNote.trim();
     content.imageUrl = this.debugImageUrl.trim();
+    content.style = this.debugStyle;
     cardReminderService.updateReminderCard(content);
-    this.pushResult = 'Pushed: title="' + content.title + '", body="' + content.body +
-      '", note="' + content.note + '", imageUrl="' + content.imageUrl + '"';
+    this.pushResult = 'Pushed: style=' + content.style + ', title="' + content.title +
+      '", body="' + content.body + '", note="' + content.note + '", imageUrl="' + content.imageUrl + '"';
   }
 
   private handleResetDefault(): void {
@@ -149,6 +167,7 @@ export struct DebugPage {
     this.debugBody = '';
     this.debugNote = '';
     this.debugImageUrl = '';
+    this.debugStyle = 'infoShowTitleBodyNoteImage';
     this.pushResult = 'Reset to default.';
   }
 
@@ -229,6 +248,7 @@ export struct DebugPage {
       return;
     }
     const paramsJson = JSON.stringify({
+      style: this.debugStyle,
       title: this.debugTitle.trim(),
       body: this.debugBody.trim(),
       note: this.debugNote.trim(),

@@ -5,6 +5,8 @@ import { PhotoResult, photoCaptureService } from '../service/PhotoCaptureService
 export struct ImportPage {
   @ObjectLink viewModel: MainViewModel;
   @StorageProp('localeVersion') localeVersion: number = 0;
+  @StorageLink('pendingImportAction') @Watch('onImportActionChange') pendingImportAction: string = '';
+  @StorageProp('isForeground') @Watch('onForegroundChange') foregroundProp: boolean = false;
 
   @State processingState: string = 'idle';
   @State photoUriState: string = '';
@@ -12,6 +14,36 @@ export struct ImportPage {
 
   aboutToAppear(): void {
     this.resetPageState();
+    this.tryConsumeImportAction();
+  }
+
+  /** 统一消费 pendingImportAction：读 AppStorage → 清除 → 触发相机/相册 */
+  private tryConsumeImportAction(): void {
+    const action = AppStorage.get<string>('pendingImportAction') || '';
+    if (action === 'camera') {
+      AppStorage.setOrCreate<string>('pendingImportAction', '');
+      console.info('[ImportPage] card trigger camera');
+      // 延迟一帧再启动相机，避免前台窗口尚未完成过渡就被 camera picker 推到后台
+      setTimeout(() => { this.handleCapturePhoto(); }, 100);
+    } else if (action === 'gallery') {
+      AppStorage.setOrCreate<string>('pendingImportAction', '');
+      console.info('[ImportPage] card trigger gallery');
+      this.handlePickFromAlbum();
+    }
+  }
+
+  /** 后台→前台时重试未消费的 pending 动作 */
+  private onForegroundChange(): void {
+    if (this.foregroundProp) {
+      this.tryConsumeImportAction();
+    }
+  }
+
+  /** 卡片按钮写入 importAction → 前台直接消费，后台等 onForegroundChange 重试 */
+  private onImportActionChange(): void {
+    if (this.foregroundProp) {
+      this.tryConsumeImportAction();
+    }
   }
 
   aboutToDisappear(): void {
