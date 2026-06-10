@@ -4,11 +4,13 @@ import {
   OpenClawCanvasCommand,
   OpenClawDeviceCommand,
   OpenClawCardCommand,
-  OpenClawLocationCommand
+  OpenClawLocationCommand,
+  OpenClawSystemCommand
 } from '../protocol/OpenClawProtocolConstants';
 import { InvokeCommandRegistry } from './InvokeCommandRegistry';
 import { cardReminderService } from '../service/CardReminderService';
 import { locationService } from '../service/LocationService';
+import { notificationService } from '../service/NotificationService';
 
 export interface NodeInvokeDispatcherCallbacks {
   isForeground(): boolean;
@@ -58,6 +60,8 @@ export class NodeInvokeDispatcher {
         return cardReminderService.handleUpdateReminderCommand(request);
       case OpenClawLocationCommand.Get:
         return await locationService.handleGetLocation(request);
+      case OpenClawSystemCommand.Notify:
+        return await notificationService.handleSystemNotify(request);
       default:
         return InvokeResult.error('INVALID_REQUEST', 'INVALID_REQUEST: unknown command');
     }

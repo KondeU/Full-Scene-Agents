@@ -2,6 +2,7 @@ import { MainViewModel } from '../viewmodel/MainViewModel';
 import { InvokeRequest } from '../api/GatewaySession';
 import { ReminderCardContent, cardReminderService } from '../service/CardReminderService';
 import { locationService } from '../service/LocationService';
+import { notificationService } from '../service/NotificationService';
 
 @Component
 export struct DebugPage {
@@ -12,9 +13,14 @@ export struct DebugPage {
   @State debugBody: string = '';
   @State debugNote: string = '';
   @State debugImageUrl: string = '';
+  @State debugStyle: string = 'infoShowTitleBodyNoteImage';
   @State locDesiredAccuracy: string = 'precise';
   @State locTimeoutMs: string = '10000';
   @State pushResult: string = '';
+  @State notifyTitle: string = 'Agent Notification';
+  @State notifyBody: string = 'This is a test notification from Agent.';
+  @State notifySound: string = '';
+  @State notifyPriority: string = 'active';
 
   aboutToAppear(): void {
     console.info('[DebugPage] aboutToAppear');
@@ -36,6 +42,8 @@ export struct DebugPage {
         this.InvokeSimulateSection();
 
         this.LocationInvokeSection();
+
+        this.NotificationInvokeSection();
       }
       .width('100%')
       .padding({ left: 20, right: 20, top: 16, bottom: 24 });
@@ -70,6 +78,22 @@ export struct DebugPage {
           .fontSize(14).onChange((v: string) => { this.debugNote = v; });
         TextInput({ placeholder: this.localizedText('debug_push_image_placeholder', 'Image URL (optional)'), text: this.debugImageUrl })
           .fontSize(14).onChange((v: string) => { this.debugImageUrl = v; });
+
+        Row({ space: 8 }) {
+          Text('Style:').fontSize(13).fontWeight(FontWeight.Medium).fontColor('#4D5563');
+
+          Select([
+            { value: 'infoShowTitleBodyNoteImage' },
+            { value: 'infoShowTitleImageAndImport' }
+          ])
+            .selected(this.debugStyle === 'infoShowTitleBodyNoteImage' ? 0 : 1)
+            .value(this.debugStyle)
+            .font({ size: 13 })
+            .fontColor('#17181C')
+            .onSelect((index: number) => {
+              this.debugStyle = index === 0 ? 'infoShowTitleBodyNoteImage' : 'infoShowTitleImageAndImport';
+            });
+        }
 
         Row({ space: 12 }) {
           Button(this.localizedText('debug_push_button', 'Push to Card'))
@@ -131,9 +155,10 @@ export struct DebugPage {
     content.body = this.debugBody.trim();
     content.note = this.debugNote.trim();
     content.imageUrl = this.debugImageUrl.trim();
+    content.style = this.debugStyle;
     cardReminderService.updateReminderCard(content);
-    this.pushResult = 'Pushed: title="' + content.title + '", body="' + content.body +
-      '", note="' + content.note + '", imageUrl="' + content.imageUrl + '"';
+    this.pushResult = 'Pushed: style=' + content.style + ', title="' + content.title +
+      '", body="' + content.body + '", note="' + content.note + '", imageUrl="' + content.imageUrl + '"';
   }
 
   private handleResetDefault(): void {
@@ -142,6 +167,7 @@ export struct DebugPage {
     this.debugBody = '';
     this.debugNote = '';
     this.debugImageUrl = '';
+    this.debugStyle = 'infoShowTitleBodyNoteImage';
     this.pushResult = 'Reset to default.';
   }
 
@@ -222,6 +248,7 @@ export struct DebugPage {
       return;
     }
     const paramsJson = JSON.stringify({
+      style: this.debugStyle,
       title: this.debugTitle.trim(),
       body: this.debugBody.trim(),
       note: this.debugNote.trim(),
@@ -233,6 +260,99 @@ export struct DebugPage {
     request.paramsJson = paramsJson;
     const result = cardReminderService.handleUpdateReminderCommand(request);
     this.pushResult = 'Invoke result: ok=' + result.ok + (result.error ? ', error=' + result.error.message : '');
+  }
+
+  @Builder NotificationInvokeSection() {
+    Column({ space: 12 }) {
+      Text(this.localizedText('debug_notify_label', 'NOTIFICATION SIMULATION'))
+        .fontSize(12).fontWeight(FontWeight.Bold).fontColor('#C8841A');
+
+      Column({ space: 10 }) {
+        Text(this.localizedText('debug_notify_desc', 'Simulate system.notify to send a test notification.'))
+          .fontSize(13).fontWeight(FontWeight.Medium).fontColor('#4D5563');
+
+        TextInput({ placeholder: 'Title', text: this.notifyTitle })
+          .fontSize(14).onChange((v: string) => { this.notifyTitle = v; });
+
+        TextInput({ placeholder: 'Body', text: this.notifyBody })
+          .fontSize(14).onChange((v: string) => { this.notifyBody = v; });
+
+        Row({ space: 8 }) {
+          Text('Priority:').fontSize(13).fontWeight(FontWeight.Medium).fontColor('#4D5563');
+
+          Button('active')
+            .type(ButtonType.Normal).fontSize(12).fontWeight(FontWeight.Bold).borderRadius(8)
+            .backgroundColor(this.notifyPriority === 'active' ? '#C8841A' : '#F6F7FA')
+            .fontColor(this.notifyPriority === 'active' ? '#FFFFFF' : '#8A92A2')
+            .border({ width: 1, color: '#E5E7EC' })
+            .onClick(() => { this.notifyPriority = 'active'; });
+
+          Button('passive')
+            .type(ButtonType.Normal).fontSize(12).fontWeight(FontWeight.Bold).borderRadius(8)
+            .backgroundColor(this.notifyPriority === 'passive' ? '#C8841A' : '#F6F7FA')
+            .fontColor(this.notifyPriority === 'passive' ? '#FFFFFF' : '#8A92A2')
+            .border({ width: 1, color: '#E5E7EC' })
+            .onClick(() => { this.notifyPriority = 'passive'; });
+
+          Button('timeSensitive')
+            .type(ButtonType.Normal).fontSize(12).fontWeight(FontWeight.Bold).borderRadius(8)
+            .backgroundColor(this.notifyPriority === 'timeSensitive' ? '#C8841A' : '#F6F7FA')
+            .fontColor(this.notifyPriority === 'timeSensitive' ? '#FFFFFF' : '#8A92A2')
+            .border({ width: 1, color: '#E5E7EC' })
+            .onClick(() => { this.notifyPriority = 'timeSensitive'; });
+        }
+
+        Row({ space: 8 }) {
+          Text('Sound:').fontSize(13).fontWeight(FontWeight.Medium).fontColor('#4D5563');
+
+          Button('default')
+            .type(ButtonType.Normal).fontSize(12).fontWeight(FontWeight.Bold).borderRadius(8)
+            .backgroundColor(this.notifySound.length === 0 ? '#C8841A' : '#F6F7FA')
+            .fontColor(this.notifySound.length === 0 ? '#FFFFFF' : '#8A92A2')
+            .border({ width: 1, color: '#E5E7EC' })
+            .onClick(() => { this.notifySound = ''; });
+
+          Button('silent')
+            .type(ButtonType.Normal).fontSize(12).fontWeight(FontWeight.Bold).borderRadius(8)
+            .backgroundColor(this.notifySound === 'none' ? '#C8841A' : '#F6F7FA')
+            .fontColor(this.notifySound === 'none' ? '#FFFFFF' : '#8A92A2')
+            .border({ width: 1, color: '#E5E7EC' })
+            .onClick(() => { this.notifySound = 'none'; });
+        }
+
+        Button(this.localizedText('debug_notify_button', 'Send Test Notification'))
+          .type(ButtonType.Normal).backgroundColor('#C8841A').fontColor('#FFFFFF')
+          .fontSize(14).fontWeight(FontWeight.Bold).borderRadius(12)
+          .onClick(() => { this.handleNotifySimulate(); });
+      }
+      .width('100%').padding(14).backgroundColor('#FFFFFF').borderRadius(14)
+      .border({ width: 1, color: '#E5E7EC' });
+    }
+    .width('100%').alignItems(HorizontalAlign.Start);
+  }
+
+  private handleNotifySimulate(): void {
+    const paramsObj: Record<string, string> = {
+      'title': this.notifyTitle.trim(),
+      'body': this.notifyBody.trim()
+    };
+    if (this.notifySound.length > 0) {
+      paramsObj['sound'] = this.notifySound;
+    }
+    if (this.notifyPriority.length > 0) {
+      paramsObj['priority'] = this.notifyPriority;
+    }
+    const request = new InvokeRequest();
+    request.id = 'debug-notify';
+    request.command = 'system.notify';
+    request.paramsJson = JSON.stringify(paramsObj);
+    notificationService.handleSystemNotify(request).then((result) => {
+      if (result.ok) {
+        this.pushResult = 'Notify ok: ' + (result.payloadJson || '{}');
+      } else {
+        this.pushResult = 'Notify error: ' + (result.error ? result.error.message : 'unknown');
+      }
+    });
   }
 
   private localizedText(name: string, fallback: string): string {

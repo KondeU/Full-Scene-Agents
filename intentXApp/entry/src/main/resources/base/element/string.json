@@ -625,6 +625,10 @@
       "value": "IntentX Agent"
     },
     {
+      "name": "notification_permission_reason",
+      "value": "Used to display agent push notifications in the notification bar"
+    },
+    {
       "name": "voice_header_eyebrow",
       "value": "VOICE"
     },

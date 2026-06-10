@@ -22,6 +22,7 @@ export default class EntryAbility extends UIAbility {
     // Make UIAbilityContext available globally for resource lookups in non-UI classes
     AppStorage.setOrCreate<Context>('abilityContext', this.context);
     AppStorage.setOrCreate<number>('localeVersion', 0);
+    AppStorage.setOrCreate<boolean>('isForeground', false);
 
     // 从卡片点击或其他路由参数中提取目标 Tab
     this.applyTargetTab(want);
@@ -81,8 +82,14 @@ export default class EntryAbility extends UIAbility {
    */
   onForeground(): void {
     hilog.info(DOMAIN, TAG, 'onForeground');
+    AppStorage.setOrCreate<boolean>('isForeground', true);
     this.bumpLocaleVersion();
     mainViewModel.refreshLocalizedUiState();
+  }
+
+  onBackground(): void {
+    hilog.info(DOMAIN, TAG, 'onBackground');
+    AppStorage.setOrCreate<boolean>('isForeground', false);
   }
 
   onNewWant(want: Want, launchParam: AbilityConstant.LaunchParam): void {
@@ -94,13 +101,6 @@ export default class EntryAbility extends UIAbility {
     hilog.info(DOMAIN, TAG, 'onFormEvent, formId=' + formId + ', message=' + message);
   }
 
-  /**
-   * Called when the ability moves to background
-   */
-  onBackground(): void {
-    hilog.info(DOMAIN, TAG, 'onBackground');
-  }
-
   private applyTargetTab(want: Want): void {
     // postCardAction 的 params 嵌套在 want.parameters.params 中，是 JSON 字符串
     const rawParams = want.parameters?.['params'];
@@ -110,12 +110,17 @@ export default class EntryAbility extends UIAbility {
     try {
       const parsed = JSON.parse(rawParams) as Record<string, string>;
       const targetPage = (parsed['targetPage'] || '').trim();
+      const importAction = (parsed['importAction'] || '').trim();
       if (targetPage.length > 0) {
         const tabIndex = this.mapTargetPageToTab(targetPage);
         if (tabIndex >= 0) {
           AppStorage.setOrCreate<number>('pendingActiveTab', tabIndex);
           hilog.info(DOMAIN, TAG, 'applyTargetTab: ' + targetPage + ' → tab ' + tabIndex);
         }
+      }
+      if (importAction.length > 0) {
+        AppStorage.setOrCreate<string>('pendingImportAction', importAction);
+        hilog.info(DOMAIN, TAG, 'applyTargetTab: importAction=' + importAction);
       }
     } catch (e) {
       hilog.warn(DOMAIN, TAG, 'applyTargetTab: failed to parse params');

@@ -8,8 +8,18 @@ struct ReminderCardWidget {
   @LocalStorageProp('note') note: string = '';
   @LocalStorageProp('imgSrc') imgSrc: string = '';
   @LocalStorageProp('hasImage') hasImageStr: string = 'false';
+  @LocalStorageProp('style') style: string = 'infoShowTitleBodyNoteImage';
 
   build() {
+    if (this.style === 'infoShowTitleImageAndImport') {
+      this.ImageImportLayout();
+    } else {
+      this.InfoShowLayout();
+    }
+  }
+
+  // ── 风格 A: infoShowTitleBodyNoteImage（信息展示卡，默认）──
+  @Builder InfoShowLayout() {
     Row() {
       // ── 左侧文字区 ──
       Column() {
@@ -58,5 +68,84 @@ struct ReminderCardWidget {
         params: { targetPage: 'import' }
       });
     });
+  }
+
+  // ── 风格 B: infoShowTitleImageAndImport（图片导入卡）──
+  @Builder ImageImportLayout() {
+    Stack() {
+      // 底层背景
+      if (this.hasImageStr === 'true') {
+        Image('memory://' + this.imgSrc)
+          .width('100%').height('100%')
+          .objectFit(ImageFit.Cover)
+          .borderRadius(16)
+          .alt($r('app.media.icon'));
+      } else {
+        // 无图：白色背景
+        Column()
+          .width('100%').height('100%')
+          .backgroundColor('#FFFFFF')
+          .borderRadius(16)
+      }
+
+      // body 文字 — 左上角，略微右移下移
+      Column() {
+        Text(this.body)
+          .fontSize(20).fontWeight(500).fontColor('#E5000000')
+          .maxLines(3)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+          .lineHeight(26)
+      }
+      .width('100%').height('100%')
+      .alignItems(HorizontalAlign.Start).justifyContent(FlexAlign.Start)
+      .padding({ left: 26, top: 18, right: 88 })
+
+      // 右侧按钮组
+      Row() {
+        Blank()
+        Column({ space: 8 }) {
+          // 📷 拍一拍
+          Column({ space: 2 }) {
+            Text('📷').fontSize(22)
+            Text('拍一拍')
+              .fontSize(12).fontWeight(FontWeight.Medium).fontColor('#1D5DD8')
+          }
+          .width(60).height(60)
+          .borderRadius(14)
+          .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
+          .backgroundColor('#B3ECF3FF')
+          .border({ width: 1, color: '#B3D5E2FA' })
+          .onClick(() => {
+            postCardAction(this, {
+              action: 'router', abilityName: 'EntryAbility',
+              params: { targetPage: 'import', importAction: 'camera' }
+            });
+          });
+
+          // 🖼️ 选一选
+          Column({ space: 2 }) {
+            Text('🖼️').fontSize(22)
+            Text('选一选')
+              .fontSize(12).fontWeight(FontWeight.Medium).fontColor('#1D5DD8')
+          }
+          .width(60).height(60)
+          .borderRadius(14)
+          .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
+          .backgroundColor('#B3ECF3FF')
+          .border({ width: 1, color: '#B3D5E2FA' })
+          .onClick(() => {
+            postCardAction(this, {
+              action: 'router', abilityName: 'EntryAbility',
+              params: { targetPage: 'import', importAction: 'gallery' }
+            });
+          });
+        }
+        .margin({ right: 14 })
+      }
+      .width('100%').height('100%')
+      .alignItems(VerticalAlign.Center)
+    }
+    .width('100%').height('100%')
+    .borderRadius(16)
   }
 }
