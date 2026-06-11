@@ -1,0 +1,10 @@
+---
+platform: codex
+trigger: "/genSkill"
+skill_output_base: "${CODEX_HOME:-~/.codex}/skills"
+skill_subdirectory: "${slug}"
+generator_command: "node scripts/generate-skill.js --plan <plan.json> --target codex --write"
+notes:
+  - Codex uses flat skill directories under ~/.codex/skills/<slug>/SKILL.md
+  - The Skill tool is available for loading generated skills after creation
+  - Environment variable CODEX_HOME overrides the default base path

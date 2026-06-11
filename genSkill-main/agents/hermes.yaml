@@ -1,0 +1,11 @@
+---
+platform: hermes
+trigger: "/genSkill"
+skill_output_base: "${HERMES_HOME:-~/.hermes}/skills/productivity"
+skill_subdirectory: "${slug}"
+generator_command: "node scripts/generate-skill.js --plan <plan.json> --target hermes --write"
+notes:
+  - Hermes nests generated skills under a "productivity" category
+  - Output path is ~/.hermes/skills/productivity/<slug>/SKILL.md
+  - Environment variable HERMES_HOME overrides the default base path
+  - After generation, call reload_skills if available in the runtime

@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Approved genSkill Plan",
+  "description": "Reference shape only. This schema is NOT wired into any runtime validation — the authoritative validator is scripts/generate-skill.cjs (see validatePlan / normalizeSkills). It exists to document the two accepted plan shapes for human readers and the plan reviewer. A plan is valid in one of two shapes: a multi-skill plan with a skills[] array (the normal case), or a legacy single-action plan with a flat steps[]. Do NOT require steps[] on a multi-skill plan — sub-skill workflow detail is authored later in writing-skills, not in the plan.",
+  "type": "object",
+  "required": [
+    "approved",
+    "user_goal",
+    "schedule_or_trigger",
+    "memory_scope",
+    "output_or_delivery",
+    "confirmation_boundary",
+    "failure_handling",
+    "acceptance_criteria",
+    "capabilities_used"
+  ],
+  "properties": {
+    "approved": { "type": "boolean", "const": true },
+    "user_goal": { "type": "string", "minLength": 1 },
+    "schedule_or_trigger": { "type": "string" },
+    "memory_scope": { "type": "string" },
+    "output_or_delivery": { "type": "string" },
+    "confirmation_boundary": { "type": "string" },
+    "failure_handling": { "type": "string" },
+    "acceptance_criteria": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1
+    },
+    "capabilities_used": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "skills": {
+      "description": "Multi-skill shape. When present and non-empty, the plan is rendered as one skill per entry, ordered by the produces/consumes DAG. inputs_needed and steps are NOT required at the top level in this shape.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "role", "user_goal", "capabilities_used"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "role": { "type": "string" },
+          "user_goal": { "type": "string" },
+          "inputs_needed": { "type": "array", "items": { "type": "string" } },
+          "capabilities_used": { "type": "array", "items": { "type": "string" } },
+          "produces": { "type": ["string", "null"] },
+          "produces_shape": {
+            "type": ["string", "null"],
+            "description": "Optional hint string giving the field shape of `produces` (e.g. \"{ date, resting_hr, steps }\"). Not enforced; used by writing-skills to align producer output with consumer inputs and by the plan reviewer to check data-contract consistency."
+          },
+          "consumes": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "orchestration": {
+      "type": "object",
+      "properties": {
+        "scheduled": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "skill": { "type": "string" },
+              "when": { "type": "string" },
+              "after": { "type": "array", "items": { "type": "string" } }
+            }
+          }
+        },
+        "immediate": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "skill": { "type": "string" },
+              "action": { "type": "string" },
+              "bindings": { "type": "array" }
+            }
+          }
+        }
+      }
+    },
+    "inputs_needed": {
+      "description": "Required ONLY on a legacy single-action plan (no skills[]).",
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "steps": {
+      "description": "Required ONLY on a legacy single-action plan (no skills[]). Never present on a multi-skill plan.",
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  },
+  "additionalProperties": true
+}
