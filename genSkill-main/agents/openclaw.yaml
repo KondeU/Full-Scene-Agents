@@ -1,0 +1,10 @@
+---
+platform: openclaw
+trigger: "/genSkill"
+skill_output_base: "${OPENCLAW_HOME:-~/.openclaw}/skills"
+skill_subdirectory: "${slug}"
+generator_command: "node scripts/generate-skill.js --plan <plan.json> --target openclaw --write"
+notes:
+  - Openclaw uses flat skill directories under ~/.openclaw/skills/<slug>/SKILL.md
+  - Environment variable OPENCLAW_HOME overrides the default base path
+  - Same schema and output format as codex target

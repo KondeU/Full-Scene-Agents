@@ -83,6 +83,54 @@
     {
       "name": "command_text",
       "value": "#E8EAEE"
+    },
+    {
+      "name": "chat_bg",
+      "value": "#F3F5F8"
+    },
+    {
+      "name": "chat_card",
+      "value": "#FFFFFF"
+    },
+    {
+      "name": "chat_primary",
+      "value": "#2B62EF"
+    },
+    {
+      "name": "chat_accent",
+      "value": "#E1ECFF"
+    },
+    {
+      "name": "chat_accent_fg",
+      "value": "#1E49B7"
+    },
+    {
+      "name": "chat_muted",
+      "value": "#EFF2F5"
+    },
+    {
+      "name": "chat_muted_fg",
+      "value": "#6B727A"
+    },
+    {
+      "name": "chat_foreground",
+      "value": "#14181C"
+    },
+    {
+      "name": "chat_border",
+      "value": "#DFE1E4"
+    },
+    {
+      "name": "chat_success",
+      "value": "#4AC06C"
+    },
+    {
+      "name": "chat_user_bubble",
+      "value": "#ADE9B8"
+    },
+    {
+      "name": "chat_user_text",
+      "value": "#1A3520"
     }
   ]
 }

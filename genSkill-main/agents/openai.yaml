@@ -1,0 +1,10 @@
+---
+platform: openai
+trigger: "/genSkill"
+skill_output_base: "${OPENAI_SKILLS_HOME:-~/.openai}/skills"
+skill_subdirectory: "${slug}"
+generator_command: "node scripts/generate-skill.cjs --plan <plan.json> --target codex --write"
+notes:
+  - OpenAI-compatible runtimes use the same output structure as codex
+  - Falls back to codex target in the generator
+  - Environment variable OPENAI_SKILLS_HOME overrides the default base path

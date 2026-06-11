@@ -19,6 +19,7 @@ const C_CMD_BORDER: string = '#2B2E35';
 const C_CMD_ACCENT: string = '#3FC97A';
 const C_CMD_TEXT: string = '#E8EAEE';
 
+
 @Component
 export struct OnboardingPage {
   @ObjectLink viewModel: MainViewModel;
@@ -155,18 +156,28 @@ export struct OnboardingPage {
   build() {
     Column() {
       Column() {
-        Text(this.localizedText('onboarding_first_run', 'FIRST RUN'))
-          .fontSize(12)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(C_ACCENT)
-          .letterSpacing(1.5);
+        Row({ space: 12 }) {
+          Image($r('app.media.intentx_logo'))
+            .width(44)
+            .height(44)
+            .borderRadius(13)
+            .objectFit(ImageFit.Cover);
+
+          Text(this.localizedText('onboarding_first_run', 'FIRST RUN'))
+            .fontSize(12)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(C_ACCENT)
+            .letterSpacing(1.5);
+        }
+        .width('100%')
+        .alignItems(VerticalAlign.Center);
 
         Text(this.localizedText('onboarding_title', 'IntentX Agent\nMobile Setup'))
           .fontSize(34)
           .fontWeight(FontWeight.Bold)
           .fontColor(C_TEXT)
           .lineHeight(38)
-          .margin({ top: 4, bottom: 4 });
+          .margin({ top: 12, bottom: 4 });
 
         Text(this.currentStepText())
           .fontSize(12)

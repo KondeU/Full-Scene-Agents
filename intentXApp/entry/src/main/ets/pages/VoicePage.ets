@@ -212,7 +212,7 @@ export struct VoicePage {
       }
 
       Column({ space: 4 }) {
-        Text(this.isUserTurn(entry) ? this.localizedText('chat_user_avatar_text', 'Me') : this.localizedText('chat_assistant_avatar_text', 'OC'))
+        Text(this.isUserTurn(entry) ? this.localizedText('chat_user_avatar_text', 'Me') : $r('app.string.chat_assistant_avatar_text'))
           .fontSize(11)
           .fontWeight(FontWeight.Bold)
           .fontColor(this.isUserTurn(entry) ? '#1D5DD8' : '#4D5563');
