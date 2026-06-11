@@ -1,6 +1,22 @@
 import { MainViewModel } from '../viewmodel/MainViewModel';
 import { ChatChoiceOption, ChatMessage, ChatPendingInteraction, ChatPendingInteractionChoice, ChatPendingToolCall, ChatSessionEntry } from '../model/GatewayModels';
 import { Markdown, MarkdownController } from '@luvi/lv-markdown-in';
+import { pasteboard } from '@kit.BasicServicesKit';
+
+// Design palette (v0 design spec, oklch -> sRGB)
+const C_BG: string = '#F3F5F8';
+const C_CARD: string = '#FFFFFF';
+const C_PRIMARY: string = '#2B62EF';
+const C_PRIMARY_SOFT: string = '#6E92F4';
+const C_ACCENT: string = '#E1ECFF';
+const C_ACCENT_FG: string = '#1E49B7';
+const C_MUTED: string = '#EFF2F5';
+const C_MUTED_FG: string = '#6B727A';
+const C_FOREGROUND: string = '#14181C';
+const C_BORDER: string = '#DFE1E4';
+const C_SUCCESS_SOFT: string = '#E4F6E9';
+const C_USER_BUBBLE: string = '#ADE9B8';
+const C_USER_TEXT: string = '#1A3520';
 
 @Component
 export struct ChatPage {
@@ -54,8 +70,9 @@ export struct ChatPage {
   }
 
   build() {
-    Column({ space: 8 }) {
-      this.ChatHeader();
+    Column() {
+      this.SessionTabs();
+      this.SessionLinkCard();
 
       if (this.chatErrorState.length > 0) {
         this.ChatErrorRail(this.chatErrorState);
@@ -66,99 +83,106 @@ export struct ChatPage {
     }
     .width('100%')
     .height('100%')
-    .padding({ left: 20, right: 20, top: 12, bottom: 12 });
+    .padding({ left: 16, right: 16 })
+    .backgroundColor(C_BG);
   }
 
-  @Builder ChatHeader() {
-    Column({ space: 8 }) {
-      Row() {
-        Text($r('app.string.chat_session'))
-          .fontSize(12)
-          .fontWeight(FontWeight.Bold)
-          .fontColor('#4D5563');
-
-        Blank();
-
-        this.ChatConnectionPill();
-      }
-      .width('100%');
-
-      Row() {
-        Text(this.currentSessionLabel())
-          .fontSize(16)
-          .fontWeight(FontWeight.Medium)
-          .fontColor('#17181C')
-          .layoutWeight(1)
-          .maxLines(1);
-
-        Button({ type: ButtonType.Normal }) {
-          Text($r('app.string.chat_sessions'))
-            .fontSize(12)
-            .fontWeight(FontWeight.Bold)
-            .fontColor('#1D5DD8');
-        }
-        .height(34)
-        .backgroundColor('#ECF3FF')
-        .borderRadius(999)
-        .padding({ left: 12, right: 12 })
-        .onClick(() => {
-          this.showSessionList = !this.showSessionList;
-          this.showThinkingOptions = false;
-          this.showSkillLaunchers = false;
-        });
-      }
-      .width('100%');
-
-      Row() {
-        ForEach(this.sessionOptions(), (session: ChatSessionEntry) => {
-          this.SessionChip(session);
-        });
-      }
-      .width('100%');
-    }
-    .width('100%');
-  }
-
-  @Builder ChatConnectionPill() {
+  @Builder SessionTabs() {
     Row() {
-      Circle()
-        .width(8)
-        .height(8)
-        .fill(this.chatHealthOkState ? '#2F8C5A' : '#C8841A');
+      Row({ space: 24 }) {
+        this.SessionTab(
+          this.localizedText('common_main', 'Main'),
+          this.chatSessionKeyState === this.viewModel.mainSessionKey,
+          () => {
+            this.viewModel.switchChatSession(this.viewModel.mainSessionKey);
+            this.showSessionList = false;
+          }
+        );
 
-      Text((this.chatHealthOkState ? $r('app.string.chat_connected') : $r('app.string.chat_offline')))
-        .fontSize(12)
-        .fontWeight(FontWeight.Medium)
-        .fontColor(this.chatHealthOkState ? '#2F8C5A' : '#C8841A')
-        .margin({ left: 6 });
+        if (this.chatSessionKeyState !== this.viewModel.mainSessionKey) {
+          this.SessionTab(this.friendlySessionName(this.chatSessionKeyState), true, () => {});
+        }
+      }
+      .layoutWeight(1);
+
+      Button({ type: ButtonType.Normal }) {
+        Row({ space: 6 }) {
+          Text('☰')
+            .fontSize(14)
+            .fontColor(C_ACCENT_FG);
+          Text($r('app.string.chat_sessions'))
+            .fontSize(14)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(C_ACCENT_FG);
+        }
+      }
+      .height(36)
+      .backgroundColor(C_ACCENT)
+      .borderRadius(14)
+      .padding({ left: 14, right: 14 })
+      .onClick(() => {
+        this.showSessionList = !this.showSessionList;
+        this.showThinkingOptions = false;
+        this.showSkillLaunchers = false;
+      });
     }
-    .padding({ left: 8, right: 8, top: 4, bottom: 4 })
-    .backgroundColor(this.chatHealthOkState ? '#E8F5EC' : '#FFF4DE')
-    .borderRadius(999)
-    .border({ width: 1, color: this.chatHealthOkState ? '#BEE0CA' : '#F0D19A' });
+    .width('100%')
+    .padding({ left: 4, right: 4, top: 12, bottom: 2 });
+  }
+
+  @Builder SessionTab(label: string, active: boolean, onTap: () => void) {
+    Column({ space: 4 }) {
+      Text(label)
+        .fontSize(17)
+        .fontWeight(active ? FontWeight.Bold : FontWeight.Normal)
+        .fontColor(active ? C_FOREGROUND : C_MUTED_FG)
+        .maxLines(1)
+        .textOverflow({ overflow: TextOverflow.Ellipsis });
+
+      if (active) {
+        Divider()
+          .width(28)
+          .strokeWidth(3)
+          .color(C_PRIMARY)
+          .lineCap(LineCapStyle.Round);
+      }
+    }
+    .padding({ top: 6, bottom: 4 })
+    .onClick(() => {
+      onTap();
+    });
+  }
+
+  @Builder SessionLinkCard() {
+    Row({ space: 12 }) {
+      Text('🔗')
+        .fontSize(18);
+
+      Text(this.chatSessionKeyState)
+        .fontSize(13)
+        .fontColor('#3D4452')
+        .fontFamily('monospace')
+        .layoutWeight(1)
+        .maxLines(1)
+        .textOverflow({ overflow: TextOverflow.Ellipsis });
+
+      Text('⧉')
+        .fontSize(18)
+        .fontColor(C_MUTED_FG)
+        .onClick(() => {
+          this.copySessionKey();
+        });
+    }
+    .width('100%')
+    .margin({ top: 6, bottom: 6 })
+    .padding({ left: 16, right: 16, top: 8, bottom: 8 })
+    .backgroundColor(C_CARD)
+    .borderRadius(18)
+    .shadow({ radius: 10, color: '#0F000000', offsetX: 0, offsetY: 2 });
   }
 
   private isActiveSession(session: ChatSessionEntry): boolean {
     return session.key === this.chatSessionKeyState;
-  }
-
-  @Builder SessionChip(session: ChatSessionEntry) {
-    Button({ type: ButtonType.Normal }) {
-      Text(this.friendlySessionName(session.displayName || session.key))
-        .fontSize(12)
-        .fontWeight(this.isActiveSession(session) ? FontWeight.Bold : FontWeight.Medium)
-        .fontColor(this.isActiveSession(session) ? '#FFFFFF' : '#17181C');
-    }
-    .height(36)
-    .backgroundColor(this.isActiveSession(session) ? '#1D5DD8' : '#FFFFFF')
-    .borderRadius(14)
-    .border({ width: 1, color: this.isActiveSession(session) ? '#154CAD' : '#D6DAE2' })
-    .padding({ left: 12, right: 12 })
-    .margin({ right: 8 })
-    .onClick(() => {
-      this.viewModel.switchChatSession(session.key);
-      this.showSessionList = false;
-    });
   }
 
   @Builder ChatErrorRail(errorText: string) {
@@ -174,7 +198,7 @@ export struct ChatPage {
         .fontColor('#17181C');
     }
     .width('100%')
-    .padding({ left: 10, right: 10, top: 8, bottom: 8 })
+    .padding({ left: 12, right: 12, top: 8, bottom: 8 })
     .backgroundColor('#FFFFFF')
     .borderRadius(12)
     .border({ width: 1, color: '#DC2626' });
@@ -222,12 +246,12 @@ export struct ChatPage {
       Text($r('app.string.chat_empty_title'))
         .fontSize(18)
         .fontWeight(FontWeight.Bold)
-        .fontColor('#17181C');
+        .fontColor(C_FOREGROUND);
 
       Text($r('app.string.chat_empty_description'))
         .fontSize(14)
         .fontWeight(FontWeight.Medium)
-        .fontColor('#8A92A2')
+        .fontColor(C_MUTED_FG)
         .textAlign(TextAlign.Center);
     }
     .width('100%')
@@ -237,7 +261,7 @@ export struct ChatPage {
   }
 
   @Builder MessageItem(message: ChatMessage) {
-    Row({ space: 8 }) {
+    Row({ space: 10 }) {
       if (message.role === 'user') {
         Blank().layoutWeight(1);
         this.MessageBubble(message);
@@ -249,6 +273,7 @@ export struct ChatPage {
       }
     }
     .width('100%')
+    .padding({ top: 6, bottom: 6 })
     .alignItems(VerticalAlign.Top);
   }
 
@@ -261,40 +286,50 @@ export struct ChatPage {
             .width('100%')
             .aspectRatio(1)
             .objectFit(ImageFit.Cover)
-            .borderRadius(8)
-            .backgroundColor('#F6F7FA');
+            .borderRadius(12)
+            .backgroundColor(C_MUTED);
         });
       }
       .width(message.role === 'user' ? '72%' : '78%')
       .constraintSize({ minWidth: 0, maxWidth: message.role === 'user' ? '72%' : '78%' })
       .flexShrink(1)
-      .padding({ left: 12, right: 12, top: 10, bottom: 10 })
-      .backgroundColor(message.role === 'user' ? '#98E866' : '#FFFFFF')
-      .borderRadius(16)
-      .border({ width: message.role === 'user' ? 0 : 1, color: '#E5E7EC' })
-      .shadow({ radius: 8, color: '#14000000', offsetX: 0, offsetY: 2 });
+      .padding({ left: 16, right: 16, top: 12, bottom: 12 })
+      .backgroundColor(message.role === 'user' ? C_USER_BUBBLE : C_CARD)
+      .borderRadius(22)
+      .shadow(message.role === 'user'
+        ? { radius: 0, color: '#00000000', offsetX: 0, offsetY: 0 }
+        : { radius: 10, color: '#0F000000', offsetX: 0, offsetY: 2 });
   }
 
   @Builder StreamingMessage(text: string) {
-    Row({ space: 8 }) {
+    Row({ space: 10 }) {
       this.MessageAvatar(false);
 
-      Column({ space: 4 }) {
-        Text('IntentX Agent')
-          .fontSize(11)
-          .fontWeight(FontWeight.Medium)
-          .fontColor('#8A92A2');
+      Column({ space: 6 }) {
+        Row() {
+          Text('IntentX Agent')
+            .fontSize(12)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(C_MUTED_FG)
+            .layoutWeight(1);
+
+          Row({ space: 4 }) {
+            Circle().width(6).height(6).fill(C_PRIMARY_SOFT);
+            Circle().width(6).height(6).fill(C_PRIMARY_SOFT);
+            Circle().width(6).height(6).fill(C_PRIMARY_SOFT);
+          }
+        }
+        .width('100%');
 
         this.StreamingMarkdownContent(text);
       }
       .width('78%')
       .constraintSize({ minWidth: 0, maxWidth: '78%' })
       .flexShrink(1)
-      .padding({ left: 12, right: 12, top: 10, bottom: 10 })
-      .backgroundColor('#FFFFFF')
-      .borderRadius(16)
-      .border({ width: 1, color: '#E5E7EC' })
-      .shadow({ radius: 8, color: '#14000000', offsetX: 0, offsetY: 2 });
+      .padding({ left: 16, right: 16, top: 12, bottom: 12 })
+      .backgroundColor(C_CARD)
+      .borderRadius(22)
+      .shadow({ radius: 10, color: '#0F000000', offsetX: 0, offsetY: 2 });
 
       Blank().layoutWeight(1);
     }
@@ -305,17 +340,17 @@ export struct ChatPage {
   @Builder MessageAvatar(isUser: boolean) {
     Stack({ alignContent: Alignment.Center }) {
       Circle()
-        .width(32)
-        .height(32)
-        .fill(isUser ? '#1D5DD8' : '#E8F5EC');
+        .width(44)
+        .height(44)
+        .fill(isUser ? C_PRIMARY : C_SUCCESS_SOFT);
 
       Text((isUser ? $r('app.string.chat_user_avatar_text') : $r('app.string.chat_assistant_avatar_text')))
-        .fontSize(12)
+        .fontSize(14)
         .fontWeight(FontWeight.Bold)
-        .fontColor(isUser ? '#FFFFFF' : '#2F8C5A');
+        .fontColor(isUser ? '#FFFFFF' : '#2E7D46');
     }
-    .width(32)
-    .height(32);
+    .width(44)
+    .height(44);
   }
 
   @Builder MarkdownMessage(text: string, isUser: boolean) {
@@ -333,10 +368,10 @@ export struct ChatPage {
 
   @Builder PlainTextMessage(text: string, isUser: boolean) {
     Text(text || '')
-      .fontSize(14)
-      .fontWeight(FontWeight.Regular)
-      .fontColor(isUser ? '#0B4F22' : '#17181C')
-      .lineHeight(20)
+      .fontSize(16)
+      .fontWeight(FontWeight.Medium)
+      .fontColor(isUser ? C_USER_TEXT : C_FOREGROUND)
+      .lineHeight(23)
       .width('100%')
       .wordBreak(WordBreak.BREAK_ALL);
   }
@@ -351,41 +386,45 @@ export struct ChatPage {
   @Builder PendingToolCallsRail() {
     Column({ space: 8 }) {
       Text($r('app.string.chat_tools_running'))
-        .fontSize(11)
+        .fontSize(12)
         .fontWeight(FontWeight.Medium)
-        .fontColor('#8A92A2');
+        .fontColor(C_MUTED_FG)
+        .margin({ left: 54 });
 
       ForEach(this.chatPendingToolCallsState, (toolCall: ChatPendingToolCall) => {
         Row() {
           Column({ space: 2 }) {
             Text(toolCall.name)
-              .fontSize(13)
+              .fontSize(14)
               .fontWeight(FontWeight.Bold)
-              .fontColor('#17181C');
+              .fontColor(C_FOREGROUND);
 
             if ((toolCall.paramsJson || '').length > 0) {
               Text(toolCall.paramsJson)
-                .fontSize(11)
+                .fontSize(12)
                 .fontWeight(FontWeight.Medium)
-                .fontColor('#8A92A2')
+                .fontColor(C_MUTED_FG)
                 .maxLines(3);
             }
           }
-          .layoutWeight(1);
+          .layoutWeight(1)
+          .alignItems(HorizontalAlign.Start);
 
           Text('…')
             .fontSize(16)
             .fontWeight(FontWeight.Bold)
-            .fontColor('#1D5DD8');
+            .fontColor(C_PRIMARY);
         }
-        .width('100%')
-        .padding({ left: 12, right: 12, top: 10, bottom: 10 })
-        .backgroundColor('#F6F7FA')
-        .borderRadius(12)
-        .border({ width: 1, color: '#E5E7EC' });
+        .width('78%')
+        .margin({ left: 54 })
+        .padding({ left: 14, right: 14, top: 12, bottom: 12 })
+        .backgroundColor(C_CARD)
+        .borderRadius(16)
+        .shadow({ radius: 10, color: '#0F000000', offsetX: 0, offsetY: 2 });
       });
     }
-    .width('100%');
+    .width('100%')
+    .alignItems(HorizontalAlign.Start);
   }
 
   @Builder AssistantChoiceOptions(options: ChatChoiceOption[]) {
@@ -394,14 +433,14 @@ export struct ChatPage {
         Button({ type: ButtonType.Normal }) {
           Row({ space: 8 }) {
             Text(String(option.index))
-              .fontSize(12)
+              .fontSize(13)
               .fontWeight(FontWeight.Bold)
-              .fontColor('#1D5DD8');
+              .fontColor(C_PRIMARY);
 
             Text(option.label)
-              .fontSize(14)
+              .fontSize(15)
               .fontWeight(FontWeight.Medium)
-              .fontColor('#17181C')
+              .fontColor(C_FOREGROUND)
               .layoutWeight(1)
               .textAlign(TextAlign.Start)
               .maxLines(3);
@@ -410,12 +449,12 @@ export struct ChatPage {
           .alignItems(VerticalAlign.Center);
         }
         .width('78%')
-        .constraintSize({ minHeight: 44 })
-        .margin({ left: 40 })
-        .padding({ left: 12, right: 12, top: 8, bottom: 8 })
-        .backgroundColor('#F7F8FA')
-        .borderRadius(12)
-        .border({ width: 1, color: '#D6DAE2' })
+        .constraintSize({ minHeight: 46 })
+        .margin({ left: 54 })
+        .padding({ left: 14, right: 14, top: 10, bottom: 10 })
+        .backgroundColor(C_CARD)
+        .borderRadius(16)
+        .shadow({ radius: 10, color: '#0F000000', offsetX: 0, offsetY: 2 })
         .enabled(this.pendingRunCountState === 0 && this.chatHealthOkState)
         .onClick(() => {
           this.sendChoiceOption(option);
@@ -431,9 +470,9 @@ export struct ChatPage {
       ForEach(interactions, (interaction: ChatPendingInteraction) => {
         Column({ space: 8 }) {
           Text(interaction.title)
-            .fontSize(15)
+            .fontSize(16)
             .fontWeight(FontWeight.Bold)
-            .fontColor(interaction.riskLevel === 'high' ? '#B42318' : '#17181C');
+            .fontColor(interaction.riskLevel === 'high' ? '#B42318' : C_FOREGROUND);
 
           if (interaction.body.length > 0) {
             Text(interaction.body)
@@ -445,11 +484,11 @@ export struct ChatPage {
           Row({ space: 8 }) {
             ForEach(interaction.choices, (choice: ChatPendingInteractionChoice) => {
               Button(choice.label)
-                .fontSize(13)
+                .fontSize(14)
                 .fontWeight(FontWeight.Medium)
                 .fontColor(choice.style === 'danger' ? '#B42318' : '#FFFFFF')
-                .backgroundColor(choice.style === 'danger' ? '#FFF1F0' : '#1D5DD8')
-                .borderRadius(10)
+                .backgroundColor(choice.style === 'danger' ? '#FFF1F0' : C_PRIMARY)
+                .borderRadius(12)
                 .enabled(interaction.status === 'pending')
                 .onClick(() => {
                   this.sendPendingInteractionChoice(interaction, choice.value);
@@ -458,11 +497,11 @@ export struct ChatPage {
           }
         }
         .width('78%')
-        .margin({ left: 40 })
-        .padding({ left: 12, right: 12, top: 10, bottom: 10 })
-        .backgroundColor('#F7F8FA')
-        .borderRadius(12)
-        .border({ width: 1, color: '#D6DAE2' });
+        .margin({ left: 54 })
+        .padding({ left: 16, right: 16, top: 12, bottom: 12 })
+        .backgroundColor(C_CARD)
+        .borderRadius(16)
+        .shadow({ radius: 10, color: '#0F000000', offsetX: 0, offsetY: 2 });
       }, (interaction: ChatPendingInteraction) => interaction.id);
     }
     .width('100%')
@@ -474,14 +513,14 @@ export struct ChatPage {
       Row() {
         Button({ type: ButtonType.Normal }) {
           Text(`${this.localizedThinking(this.chatThinkingLevelState)}`)
-            .fontSize(12)
-            .fontWeight(FontWeight.Bold)
-            .fontColor('#1D5DD8');
+            .fontSize(13)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(C_ACCENT_FG);
         }
         .height(34)
-        .backgroundColor('#ECF3FF')
+        .backgroundColor(C_ACCENT)
         .borderRadius(999)
-        .padding({ left: 12, right: 12 })
+        .padding({ left: 14, right: 14 })
         .onClick(() => {
           this.showThinkingOptions = !this.showThinkingOptions;
           this.showSessionList = false;
@@ -492,20 +531,21 @@ export struct ChatPage {
 
         Button({ type: ButtonType.Normal }) {
           Text($r('app.string.chat_refresh'))
-            .fontSize(12)
-            .fontWeight(FontWeight.Bold)
-            .fontColor('#4D5563');
+            .fontSize(13)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(C_MUTED_FG);
         }
         .height(34)
-        .backgroundColor('#F6F7FA')
+        .backgroundColor(C_MUTED)
         .borderRadius(999)
-        .padding({ left: 12, right: 12 })
+        .padding({ left: 14, right: 14 })
         .onClick(() => {
           this.viewModel.refreshChat();
           this.viewModel.refreshChatSessions(200);
         });
       }
-      .width('100%');
+      .width('100%')
+      .padding({ left: 4, right: 4 });
 
       if (this.showThinkingOptions) {
         this.ThinkingOptions();
@@ -519,20 +559,18 @@ export struct ChatPage {
         this.SkillLauncherPanel();
       }
 
-      Row() {
+      Row({ space: 10 }) {
         Button({ type: ButtonType.Normal }) {
           Text(this.selectedSkillLauncherIcon.length > 0 ? this.selectedSkillLauncherIcon : '/')
-            .fontSize(this.selectedSkillLauncherIcon.length > 0 ? 20 : 18)
+            .fontSize(this.selectedSkillLauncherIcon.length > 0 ? 16 : 16)
             .fontWeight(FontWeight.Bold)
-            .fontColor(this.canOpenSkillLaunchers() || this.selectedSkillLauncherPrefix.length > 0 ? '#1D5DD8' : '#8A92A2');
+            .fontColor(this.canOpenSkillLaunchers() || this.selectedSkillLauncherPrefix.length > 0 ? C_PRIMARY : C_MUTED_FG);
         }
-        .width(48)
-        .height(48)
-        .backgroundColor(this.selectedSkillLauncherPrefix.length > 0 ? '#ECF3FF' : '#F7F8FA')
-        .borderRadius(24)
-        .border({ width: 1, color: this.selectedSkillLauncherPrefix.length > 0 ? '#BFD5FF' : '#E5E7EC' })
+        .width(34)
+        .height(34)
+        .backgroundColor(C_ACCENT)
+        .borderRadius(13)
         .enabled(this.canOpenSkillLaunchers() || this.selectedSkillLauncherPrefix.length > 0)
-        .margin({ right: 8 })
         .onClick(() => {
           if (this.selectedSkillLauncherPrefix.length > 0) {
             this.clearSkillLauncher();
@@ -546,62 +584,66 @@ export struct ChatPage {
         if (this.composerInputVisible) {
           TextInput({ placeholder: this.inputPlaceholder(), text: this.messageText })
             .layoutWeight(1)
-            .height(48)
-            .backgroundColor('#F7F8FA')
-            .borderColor('#E5E7EC')
-            .borderWidth(1)
-            .borderRadius(22)
-            .padding({ left: 16, right: 16 })
-            .fontSize(14)
-            .fontColor('#17181C')
+            .height(34)
+            .backgroundColor(Color.Transparent)
+            .borderWidth(0)
+            .padding({ left: 8, right: 8 })
+            .fontSize(16)
+            .fontColor(C_FOREGROUND)
+            .placeholderColor(C_MUTED_FG)
             .enabled(this.chatHealthOkState && this.pendingRunCountState === 0)
-            .margin({ right: 8 })
             .onChange((value: string) => {
               this.messageText = value;
             });
         } else {
           Blank()
             .layoutWeight(1)
-            .height(48)
-            .margin({ right: 8 });
+            .height(34);
         }
 
-        Button(this.pendingRunCountState > 0 ? '■' : '➤')
-          .width(48)
-          .height(48)
-          .backgroundColor(this.canSendMessage() || this.canAbortMessage() ? '#1D5DD8' : '#E5E7EC')
-          .borderRadius(24)
-          .fontSize(18)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(this.canSendMessage() || this.canAbortMessage() ? '#FFFFFF' : '#8A92A2')
-          .enabled(this.canSendMessage() || this.canAbortMessage())
-          .onClick(() => {
-            if (this.canAbortMessage()) {
-              this.abortMessage();
-            } else {
-              this.sendMessage();
-            }
-          });
+        Button({ type: ButtonType.Circle }) {
+          Text(this.pendingRunCountState > 0 ? '■' : '➤')
+            .fontSize(this.pendingRunCountState > 0 ? 14 : 18)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(this.canSendMessage() || this.canAbortMessage() ? '#FFFFFF' : C_MUTED_FG)
+            .textAlign(TextAlign.Center);
+        }
+        .width(34)
+        .height(34)
+        .backgroundColor(this.canSendMessage() || this.canAbortMessage() ? C_PRIMARY : C_MUTED)
+        .enabled(this.canSendMessage() || this.canAbortMessage())
+        .onClick(() => {
+          if (this.canAbortMessage()) {
+            this.abortMessage();
+          } else {
+            this.sendMessage();
+          }
+        });
       }
-      .width('100%');
+      .width('100%')
+      .padding({ left: 6, right: 6, top: 6, bottom: 6 })
+      .backgroundColor(C_CARD)
+      .borderRadius(20)
+      .shadow({ radius: 10, color: '#0F000000', offsetX: 0, offsetY: 2 });
     }
     .width('100%')
-    .padding({ top: 8, bottom: 4 });
+    .padding({ top: 8, bottom: 10 })
+    .backgroundColor(C_BG);
   }
 
   @Builder SkillLauncherPanel() {
     Column({ space: 8 }) {
       Row() {
         Text(this.localizedText('chat_skill_launchers', 'Shortcuts'))
-          .fontSize(14)
+          .fontSize(15)
           .fontWeight(FontWeight.Bold)
-          .fontColor('#17181C');
+          .fontColor(C_FOREGROUND);
 
         Blank();
 
         Text($r('app.string.chat_close'))
           .fontSize(16)
-          .fontColor('#8A92A2')
+          .fontColor(C_MUTED_FG)
           .onClick(() => {
             this.showSkillLaunchers = false;
           });
@@ -616,14 +658,13 @@ export struct ChatPage {
             Text('genSkills')
               .fontSize(12)
               .fontWeight(FontWeight.Bold)
-              .fontColor('#17181C');
+              .fontColor(C_FOREGROUND);
           }
         }
         .width(92)
         .height(72)
-        .backgroundColor('#F7F8FA')
-        .borderRadius(12)
-        .border({ width: 1, color: '#E5E7EC' })
+        .backgroundColor(C_MUTED)
+        .borderRadius(14)
         .onClick(() => {
           this.selectedSkillLauncherPrefix = '/genskills';
           this.selectedSkillLauncherIcon = '🧩';
@@ -634,32 +675,32 @@ export struct ChatPage {
       .width('100%');
     }
     .width('100%')
-    .padding({ left: 12, right: 12, top: 12, bottom: 12 })
-    .backgroundColor('#FFFFFF')
-    .borderRadius(12)
-    .border({ width: 1, color: '#E5E7EC' });
+    .padding({ left: 16, right: 16, top: 14, bottom: 14 })
+    .backgroundColor(C_CARD)
+    .borderRadius(18)
+    .shadow({ radius: 10, color: '#0F000000', offsetX: 0, offsetY: 2 });
   }
 
   @Builder ThinkingOptions() {
     Column({ space: 8 }) {
       Text($r('app.string.chat_thinking_level'))
-        .fontSize(14)
+        .fontSize(15)
         .fontWeight(FontWeight.Bold)
-        .fontColor('#17181C');
+        .fontColor(C_FOREGROUND);
 
       ForEach(['off', 'low', 'medium', 'high'], (level: string) => {
         Row() {
           Text(this.localizedThinkingLevel(level))
-            .fontSize(14)
+            .fontSize(15)
             .fontWeight(FontWeight.Medium)
-            .fontColor('#17181C');
+            .fontColor(C_FOREGROUND);
 
           Blank();
 
           if (this.chatThinkingLevelState === level) {
             Text('✓')
-              .fontSize(14)
-              .fontColor('#1D5DD8');
+              .fontSize(15)
+              .fontColor(C_PRIMARY);
           }
         }
         .width('100%')
@@ -671,25 +712,25 @@ export struct ChatPage {
       });
     }
     .width('100%')
-    .padding({ left: 12, right: 12, top: 12, bottom: 12 })
-    .backgroundColor('#FFFFFF')
-    .borderRadius(12)
-    .border({ width: 1, color: '#E5E7EC' });
+    .padding({ left: 16, right: 16, top: 14, bottom: 14 })
+    .backgroundColor(C_CARD)
+    .borderRadius(18)
+    .shadow({ radius: 10, color: '#0F000000', offsetX: 0, offsetY: 2 });
   }
 
   @Builder SessionList() {
     Column({ space: 8 }) {
       Row() {
         Text($r('app.string.chat_sessions'))
-          .fontSize(14)
+          .fontSize(15)
           .fontWeight(FontWeight.Bold)
-          .fontColor('#17181C');
+          .fontColor(C_FOREGROUND);
 
         Blank();
 
         Text($r('app.string.chat_close'))
           .fontSize(16)
-          .fontColor('#8A92A2')
+          .fontColor(C_MUTED_FG)
           .onClick(() => {
             this.showSessionList = false;
           });
@@ -697,17 +738,27 @@ export struct ChatPage {
       .width('100%');
 
       ForEach(this.sessionOptions(), (session: ChatSessionEntry) => {
-        Column({ space: 2 }) {
-          Text(this.friendlySessionName(session.displayName || session.key))
-            .fontSize(14)
-            .fontWeight(FontWeight.Medium)
-            .fontColor('#17181C');
+        Row() {
+          Column({ space: 2 }) {
+            Text(this.friendlySessionName(session.displayName || session.key))
+              .fontSize(15)
+              .fontWeight(this.isActiveSession(session) ? FontWeight.Bold : FontWeight.Medium)
+              .fontColor(this.isActiveSession(session) ? C_PRIMARY : C_FOREGROUND);
 
-          if (session.updatedAtMs > 0) {
-            Text(this.sessionUpdatedText(session.updatedAtMs))
-              .fontSize(11)
-              .fontWeight(FontWeight.Medium)
-              .fontColor('#8A92A2');
+            if (session.updatedAtMs > 0) {
+              Text(this.sessionUpdatedText(session.updatedAtMs))
+                .fontSize(12)
+                .fontWeight(FontWeight.Medium)
+                .fontColor(C_MUTED_FG);
+            }
+          }
+          .layoutWeight(1)
+          .alignItems(HorizontalAlign.Start);
+
+          if (this.isActiveSession(session)) {
+            Text('✓')
+              .fontSize(15)
+              .fontColor(C_PRIMARY);
           }
         }
         .width('100%')
@@ -719,10 +770,10 @@ export struct ChatPage {
       });
     }
     .width('100%')
-    .padding({ left: 12, right: 12, top: 12, bottom: 12 })
-    .backgroundColor('#FFFFFF')
-    .borderRadius(12)
-    .border({ width: 1, color: '#E5E7EC' });
+    .padding({ left: 16, right: 16, top: 14, bottom: 14 })
+    .backgroundColor(C_CARD)
+    .borderRadius(18)
+    .shadow({ radius: 10, color: '#0F000000', offsetX: 0, offsetY: 2 });
   }
 
   private canSendMessage(): boolean {
@@ -785,6 +836,19 @@ export struct ChatPage {
     return this.friendlySessionName(this.chatSessionKeyState);
   }
 
+  private copySessionKey(): void {
+    const key = this.chatSessionKeyState;
+    if (!key || key.length === 0) {
+      return;
+    }
+    try {
+      const data = pasteboard.createData(pasteboard.MIMETYPE_TEXT_PLAIN, key);
+      pasteboard.getSystemPasteboard().setData(data);
+    } catch (error) {
+      console.warn('ChatPage: copySessionKey failed');
+    }
+  }
+
   private sessionOptions(): ChatSessionEntry[] {
     const existing: ChatSessionEntry[] = [...this.chatSessionsState];
     const hasCurrent = existing.findIndex((session: ChatSessionEntry) => session.key === this.chatSessionKeyState) >= 0;
@@ -831,10 +895,10 @@ export struct ChatPage {
   }
 
   private configureMarkdownControllers(): void {
-    this.configureMarkdownController(this.streamingMarkdownController, '#17181C', '#1D5DD8', '#F6F7FA', '#F6F7FA');
+    this.configureMarkdownController(this.streamingMarkdownController, C_FOREGROUND, C_PRIMARY, C_MUTED, C_MUTED);
     this.streamingMarkdownController.setThreadRenderEnable(true);
-    this.configureMarkdownController(this.userMarkdownController, '#17181C', '#0B4F22', '#D9F6B8', '#E7F8D3');
-    this.configureMarkdownController(this.openclawMarkdownController, '#17181C', '#1D5DD8', '#F6F7FA', '#F6F7FA');
+    this.configureMarkdownController(this.userMarkdownController, C_USER_TEXT, '#0B4F22', '#9FE0AC', '#BCEBC6');
+    this.configureMarkdownController(this.openclawMarkdownController, C_FOREGROUND, C_PRIMARY, C_MUTED, C_MUTED);
     this.userMarkdownController.setThreadRenderEnable(true);
     this.openclawMarkdownController.setThreadRenderEnable(true);
   }
@@ -846,16 +910,16 @@ export struct ChatPage {
     quoteBackgroundColor: string): void {
     controller
       .setTextColor(textColor)
-      .setTextSize(14)
-      .setTextLineHeight(20)
-      .setTitleColor('#17181C')
-      .setTitleSize([20, 18, 17, 16, 15, 14])
-      .setTitleLineHeight([28, 26, 24, 22, 21, 20])
+      .setTextSize(16)
+      .setTextLineHeight(23)
+      .setTitleColor(C_FOREGROUND)
+      .setTitleSize([22, 20, 18, 17, 16, 15])
+      .setTitleLineHeight([30, 28, 26, 24, 22, 21])
       .setTitleFontWeight(FontWeight.Bold)
       .setInlineCodeColor('#C2410C')
       .setInlineCodeBackgroundColor(inlineCodeBackgroundColor)
       .setInlineCodeBackgroundRadius(6)
-      .setQuoteBorderColor('#1D5DD8')
+      .setQuoteBorderColor(C_PRIMARY)
       .setQuoteBorderWidth(4)
       .setQuoteBorderRadius(12)
       .setQuoteBackgroundColor(quoteBackgroundColor)
@@ -868,7 +932,7 @@ export struct ChatPage {
       .setImageWidth('100%')
       .setTableAlign(FlexAlign.Start)
       .setTableBorderRadius(12)
-      .setTableOuterBorderColor('#D6DAE2');
+      .setTableOuterBorderColor(C_BORDER);
   }
 
   private getMarkdownControllerForRole(isUser: boolean): MarkdownController {
