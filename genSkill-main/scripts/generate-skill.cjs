@@ -595,10 +595,105 @@ function filterOrchestration(orch, skipSet) {
   return out;
 }
 
+// --- List existing skills ---
+//
+// Used by the brainstorming Step-0 reuse check. Scans the target home's skills
+// directory and returns one entry per top-level skill workflow, carrying the
+// human-readable flow.md (when present), the root SKILL.md description (fallback
+// for skills generated before flow.md existed), and the schedule from
+// orchestration.json. It does NOT decide similarity — that judgment is the LLM's.
+
+// Directories that are not user-generated workflows and must be excluded.
+const LIST_SKIP_DIRS = new Set([".system"]);
+
+function skillsRoot(target, home) {
+  // Mirror outputPath()'s per-target layout: hermes nests under productivity/.
+  return target === "hermes"
+    ? path.join(home, "skills", "productivity")
+    : path.join(home, "skills");
+}
+
+// Read a frontmatter `description` from a SKILL.md, or null if unavailable.
+function readDescription(skillMdPath) {
+  try {
+    const text = fs.readFileSync(skillMdPath, "utf-8");
+    const { meta } = splitFrontmatter(text, skillMdPath);
+    return (meta.description || "").trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+// Read the schedule expression(s) from an orchestration.json, or null.
+function readTrigger(orchPath) {
+  try {
+    const orch = JSON.parse(fs.readFileSync(orchPath, "utf-8"));
+    if (Array.isArray(orch.scheduled) && orch.scheduled.length > 0) {
+      return orch.scheduled.map((e) => e.when).filter(Boolean).join(", ") || null;
+    }
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
+function listExisting(target, homeOverride) {
+  const home = targetHome(target, homeOverride);
+  const root = skillsRoot(target, home);
+  let entries;
+  try {
+    entries = fs.readdirSync(root, { withFileTypes: true });
+  } catch {
+    return { status: "listed", target, skills: [] };
+  }
+
+  // Group sub-skill directories (<slug>-<sub>) under their plan-slug parent so
+  // each workflow appears once. A directory is a plan root when it holds an
+  // orchestration.json (multi-skill) or a SKILL.md with no orchestrated parent.
+  const dirs = entries
+    .filter((e) => e.isDirectory() && !LIST_SKIP_DIRS.has(e.name) && !e.name.startsWith("genSkill"))
+    .map((e) => e.name);
+
+  const planRoots = dirs.filter((name) =>
+    fs.existsSync(path.join(root, name, "orchestration.json"))
+  );
+  // Sub-skill dirs share a plan-root prefix ("<root>-..."); fold them away.
+  const isSubOfPlanRoot = (name) =>
+    planRoots.some((r) => r !== name && name.startsWith(`${r}-`));
+
+  const skills = [];
+  for (const name of dirs) {
+    if (isSubOfPlanRoot(name)) continue;
+    const dir = path.join(root, name);
+    const orchPath = path.join(dir, "orchestration.json");
+    const hasOrch = fs.existsSync(orchPath);
+    const skillMd = path.join(dir, "SKILL.md");
+    if (!hasOrch && !fs.existsSync(skillMd)) continue;
+
+    const flowPath = path.join(dir, "flow.md");
+    let flow = null;
+    try {
+      flow = fs.readFileSync(flowPath, "utf-8").trim() || null;
+    } catch {
+      flow = null;
+    }
+
+    skills.push({
+      slug: name,
+      dir,
+      flow,
+      description: readDescription(skillMd),
+      trigger: hasOrch ? readTrigger(orchPath) : null,
+    });
+  }
+
+  return { status: "listed", target, skills };
+}
+
 // --- CLI ---
 
 function parseArgs(argv) {
-  const args = { plan: null, target: null, home: null, write: false, dryRun: false };
+  const args = { plan: null, target: null, home: null, write: false, dryRun: false, list: false };
   for (let i = 0; i < argv.length; i++) {
     switch (argv[i]) {
       case "--plan":
@@ -616,6 +711,9 @@ function parseArgs(argv) {
       case "--dry-run":
         args.dryRun = true;
         break;
+      case "--list":
+        args.list = true;
+        break;
     }
   }
   return args;
@@ -624,12 +722,19 @@ function parseArgs(argv) {
 function main() {
   const args = parseArgs(process.argv.slice(2));
 
-  if (!args.plan) {
-    console.error("Error: --plan is required");
-    process.exit(1);
-  }
   if (!args.target || !SUPPORTED_TARGETS.includes(args.target)) {
     console.error(`Error: --target must be one of: ${SUPPORTED_TARGETS.join(", ")}`);
+    process.exit(1);
+  }
+
+  // --list mode: enumerate existing skills for the reuse check. No plan needed.
+  if (args.list) {
+    console.log(JSON.stringify(listExisting(args.target, args.home), null, 2));
+    process.exit(0);
+  }
+
+  if (!args.plan) {
+    console.error("Error: --plan is required");
     process.exit(1);
   }
 

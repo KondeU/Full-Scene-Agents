@@ -9,9 +9,16 @@ Let the user see the just-created skill working once, immediately after generati
 
 ## Precondition
 
-This skill may only be invoked when:
-- `genSkill:writing-skills` has finished writing every surviving skill's SKILL.md
-- The skill file(s) exist at the reported path(s), and `orchestration.json` exists for a multi-skill workflow
+This skill may be invoked in **either** case:
+
+- **Just generated** — `genSkill:writing-skills` has finished writing every
+  surviving skill's SKILL.md, and the file(s) plus `orchestration.json` (for a
+  multi-skill workflow) exist at the reported path(s).
+- **Reuse of an existing workflow** — Phase 1's reuse check (Step 0) found a saved
+  做法 and the user chose 就用这个. The workflow's directory (SKILL.md files +
+  `orchestration.json` for multi-skill) is already on disk; no generation runs.
+  Locate it by the slug returned from the `--list` reuse check, then proceed with
+  the same flow below.
 
 ## Single Skill vs. Multi-Skill
 
@@ -62,6 +69,8 @@ Wait for the user's response.
 
 Based on the `inputs_needed` from the plan:
 - Ask the user to provide the minimum inputs for one run
+- On the **reuse path** the plan JSON isn't in context — read `inputs_needed` from
+  the entry-point skill's `## Inputs` section in its SKILL.md instead.
 - One question at a time, same rules as brainstorming (concrete, plain language, max 3 choices if applicable)
 - If an input is optional for a first run, skip it and note: "这次先跳过 [x]，下次用的时候再提供也行。"
 - For a multi-skill workflow, collect inputs only for the entry-point sub-skill (the one that `consumes` nothing). Downstream sub-skills receive their inputs as upstream products.

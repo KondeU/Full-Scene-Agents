@@ -655,7 +655,7 @@ export struct ChatPage {
           Column({ space: 4 }) {
             Text('🧩')
               .fontSize(22);
-            Text('genSkills')
+            Text('个性化任务')
               .fontSize(12)
               .fontWeight(FontWeight.Bold)
               .fontColor(C_FOREGROUND);
