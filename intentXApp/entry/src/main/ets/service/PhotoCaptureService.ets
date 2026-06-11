@@ -181,8 +181,14 @@ export class PhotoCaptureService {
           ', prevError=' + (mainViewModel.chatError || '(none)')
         );
         const prevError = mainViewModel.chatError;
+        // 确定发送文本：skill 非空时用 /skill <name>，否则默认 /ImageData
+        const skill = AppStorage.get<string>('cardSkill');
+        const msgText = (skill && skill.trim().length > 0)
+          ? ('/skill ' + skill.trim())
+          : '/ImageData';
+        console.info(SHARE_TAG + ' sendChat msgText=' + msgText + ' skill=' + (skill || '(none)'));
         // sessionKey='ImportImage' — 发到专用会话，避免主对话被心跳刷屏
-        mainViewModel.sendChat('/ImageData', 'off', [attachment], undefined, 'ImportImage');
+        mainViewModel.sendChat(msgText, 'off', [attachment], undefined, 'ImportImage');
         // sendChat 内部若检测到 isConnected==false，会设置 chatError 并 return
         const sendFailed = (mainViewModel.chatError !== null && mainViewModel.chatError !== prevError);
         if (sendFailed) {

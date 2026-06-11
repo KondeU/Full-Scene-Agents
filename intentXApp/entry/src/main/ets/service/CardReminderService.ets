@@ -12,6 +12,7 @@ export class ReminderCardContent {
   note: string = '';
   imageUrl: string = '';
   style: string = '';   // '' | 'infoShowTitleBodyNoteImage' | 'infoShowTitleImageAndImport'
+  skill: string = '';   // 可选，拍/选图片后发送给 chat 的技能文本。空则默认 '/ImageData'
 }
 
 export class CardReminderService {
@@ -52,10 +53,12 @@ export class CardReminderService {
 
   updateReminderCard(content: ReminderCardContent): void {
     this.currentContent = content;
+    // skill 不参与卡片渲染，存入 AppStorage 供拍照/选图后 sendChat 构造消息文本
+    AppStorage.setOrCreate<string>('cardSkill', content.skill);
     console.info('CardReminderService: update ' +
       'title=' + content.title + ' body=' + content.body +
       ' note=' + content.note + ' imageUrl=' + content.imageUrl +
-      ' style=' + content.style +
+      ' style=' + content.style + ' skill=' + content.skill +
       ' hasImage=' + (content.imageUrl.length > 0) +
       ' formIdsCount=' + this.formIds.length);
 
@@ -81,6 +84,7 @@ export class CardReminderService {
       content.note = (p['note'] || '').trim();
       content.imageUrl = (p['imageUrl'] || '').trim();
       content.style = (p['style'] || '').trim();
+      content.skill = (p['skill'] || '').trim();
       if (content.body.length === 0) return InvokeResult.error('INVALID_PARAMS', 'body is required');
       this.updateReminderCard(content);
       return InvokeResult.ok(JSON.stringify({ ok: true, formIdsCount: this.formIds.length }));
