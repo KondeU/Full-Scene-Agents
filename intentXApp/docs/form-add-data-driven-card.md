@@ -10,9 +10,10 @@
    - `infoShowTitleBodyNoteImage`（默认）：左右分栏布局，左边三行文字（标题、正文、备注），右边可选一张图；若无图则文字区自动扩展占满整行宽度
    - `infoShowTitleImageAndImport`（新增）：全幅背景图铺满卡片，右侧两个半透明操作按钮引导用户拍照/选图导入
 2. **`updateReminderCard` 接口**：刷新卡片上的提醒内容；既作为本地 API 接口，又作为 Claw node invoke command（`card.reminder.update`），可被智能体通过 Gateway 调用。Agent 通过 `style` 参数实时选择渲染哪种卡片风格
-3. **默认卡片内容**："当前无主动提醒"
-4. **调试 Tab 页面**：新增"调试"tab（index=6），用于调试卡片内容推送、invoke command 响应、后续也可以复用给其他新增能力的调试
-5. **最小侵入**：优先新增文件，对现有代码改动仅限于必要的位置
+3. **`skill` 参数（新增）**：可选配置，不参与卡片渲染。当用户通过卡片上的"拍一拍"或"选一选"拍照/选图后，`skill` 决定发送给 chat 的指令文本——非空时发 `/skill <值>`，空时默认发 `/ImageData`。用于 Agent 指定图片导入后的处理技能
+4. **默认卡片内容**："当前无主动提醒"
+5. **调试 Tab 页面**：新增"调试"tab（index=6），用于调试卡片内容推送、invoke command 响应、后续也可以复用给其他新增能力的调试
+6. **最小侵入**：优先新增文件，对现有代码改动仅限于必要的位置
 
 ---
 
@@ -66,6 +67,7 @@ HarmonyOS 的 **Form Kit**（也叫"卡片"或"服务卡片"）是系统级的�
 | **修改** | `NodeInvokeDispatcher.ets` | 新增 card command 处理分支 | +5 行 |
 | **修改** | `EntryAbility.ets` | onNewWant 处理卡片路由（targetPage + importAction） | +12 行 |
 | **修改** | `ImportPage.ets` | aboutToAppear 读取 importAction 自动触发拍照/相册 | +8 行 |
+| **修改** | `PhotoCaptureService.ets` | obtainPhotoToProcess 读 cardSkill 构造 chat 消息文本 | +4 行 |
 | **修改** | 3 × `string.json` | 新增国际化 key（卡片+调试） | ~25 条/文件 |
 
 **不改动**：`GatewaySession.ets`、`GatewayModels.ets`、`SecurePrefs.ets`、所有已有 Page（除 PostOnboardingTabs）、`DeviceAuthStore`、`DeviceIdentityStore`
@@ -1356,7 +1358,8 @@ if (importAction.length > 0) {
   "title": "会议提醒",          // 可选，标题行（infoShowTitleImageAndImport 风格下忽略）
   "body": "下午 3:00 产品评审会议，会议室 A304",  // 必填，正文行
   "note": "请提前准备演示材料",   // 可选，备注行（infoShowTitleImageAndImport 风格下忽略）
-  "imageUrl": "https://example.com/chart.png"  // 可选。有图时根据 style 做不同渲染；infoShowTitleImageAndImport 下无图时只显示 body 文字（上部左对齐）
+  "imageUrl": "https://example.com/chart.png",  // 可选。有图时根据 style 做不同渲染；infoShowTitleImageAndImport 下无图时只显示 body 文字（上部左对齐）
+  "skill": "数据录入"             // 可选，拍照/选图后发送给 chat 的技能指令。空则默认 '/ImageData'
 }
 ```
 
@@ -1395,7 +1398,18 @@ if (importAction.length > 0) {
 - `style` 为 `infoShowTitleImageAndImport` 时：有 `imageUrl` 则全幅铺满+右侧按钮，无 `imageUrl` 则只显示 body 文字（上部左对齐）
 - `title`、`note` 在 `infoShowTitleBodyNoteImage` 风格下可选，在 `infoShowTitleImageAndImport` 风格下忽略
 - `imageUrl` 若提供必须是合法的 HTTP/HTTPS URL
-- 所有字段最大长度：title 50 字符，body 200 字符，note 80 字符
+- `skill` 可选，任意字符串。不参与卡片渲染，存入 AppStorage(`cardSkill`)。拍/选后发送 chat 时使用
+- 所有字段最大长度：title 50 字符，body 200 字符，note 80 字符，skill 100 字符
+
+**`skill` 参数说明**：
+
+| skill 值 | 拍/选图片后发送的 chat 文本 |
+|----------|--------------------------|
+| 空 / 不传 | `/ImageData`（默认行为） |
+| `"数据录入"` | `/skill 数据录入` |
+| `"健康记录"` | `/skill 健康记录` |
+
+**数据流**：`card.reminder.update { skill } → CardReminderService → AppStorage('cardSkill') → PhotoCaptureService.obtainPhotoToProcess() → sendChat(msgText)`
 
 ### 9.2 智能体调用示例
 
@@ -1430,6 +1444,22 @@ if (importAction.length > 0) {
 → 下载图片 → 推送到桌面卡片
 → 卡片以全幅背景图 + 右侧"拍一拍""选一选"按钮渲染
 → 返回 InvokeResult.ok({"ok":true,"formIdsCount":1})
+```
+
+**带 skill 参数的调用示例**：
+
+```
+智能体 → Gateway → node.invoke.request
+{
+  "command": "card.reminder.update",
+  "paramsJson": "{\"style\":\"infoShowTitleImageAndImport\",\"body\":\"拍一张体检报告\",\"skill\":\"数据录入\"}"
+}
+→ HarmonyOS NodeSession 接收
+→ NodeInvokeDispatcher 路由到 CardReminderService.handleUpdateReminderCommand()
+→ 解析 skill=数据录入 → 存入 AppStorage('cardSkill')
+→ 推送到桌面卡片（卡片内容不含 skill）
+→ 用户点击"拍一拍"拍照后 → PhotoCaptureService 读 cardSkill='数据录入'
+→ sendChat('/skill 数据录入', [attachment]) ← 代替默认的 '/ImageData'
 ```
 
 ---

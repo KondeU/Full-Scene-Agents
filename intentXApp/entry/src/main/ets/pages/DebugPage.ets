@@ -14,6 +14,7 @@ export struct DebugPage {
   @State debugNote: string = '';
   @State debugImageUrl: string = '';
   @State debugStyle: string = 'infoShowTitleBodyNoteImage';
+  @State debugSkill: string = '';
   @State locDesiredAccuracy: string = 'precise';
   @State locTimeoutMs: string = '10000';
   @State pushResult: string = '';
@@ -95,6 +96,9 @@ export struct DebugPage {
             });
         }
 
+        TextInput({ placeholder: 'Skill (optional, e.g. 数据录入)', text: this.debugSkill })
+          .fontSize(14).onChange((v: string) => { this.debugSkill = v; });
+
         Row({ space: 12 }) {
           Button(this.localizedText('debug_push_button', 'Push to Card'))
             .type(ButtonType.Normal).backgroundColor('#C8841A').fontColor('#FFFFFF')
@@ -156,8 +160,9 @@ export struct DebugPage {
     content.note = this.debugNote.trim();
     content.imageUrl = this.debugImageUrl.trim();
     content.style = this.debugStyle;
+    content.skill = this.debugSkill.trim();
     cardReminderService.updateReminderCard(content);
-    this.pushResult = 'Pushed: style=' + content.style + ', title="' + content.title +
+    this.pushResult = 'Pushed: style="' + content.style + '", skill="' + content.skill + '", title="' + content.title +
       '", body="' + content.body + '", note="' + content.note + '", imageUrl="' + content.imageUrl + '"';
   }
 
@@ -168,6 +173,7 @@ export struct DebugPage {
     this.debugNote = '';
     this.debugImageUrl = '';
     this.debugStyle = 'infoShowTitleBodyNoteImage';
+    this.debugSkill = '';
     this.pushResult = 'Reset to default.';
   }
 
@@ -252,7 +258,8 @@ export struct DebugPage {
       title: this.debugTitle.trim(),
       body: this.debugBody.trim(),
       note: this.debugNote.trim(),
-      imageUrl: this.debugImageUrl.trim()
+      imageUrl: this.debugImageUrl.trim(),
+      skill: this.debugSkill.trim()
     });
     const request = new InvokeRequest();
     request.id = 'debug-simulate';
