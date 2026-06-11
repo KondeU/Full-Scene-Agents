@@ -1,8 +1,8 @@
 import { MainViewModel } from '../viewmodel/MainViewModel';
 import { ConnectPage } from './ConnectPage';
 import { ChatPage } from './ChatPage';
-import { VoicePage } from './VoicePage';
-import { ScreenPage } from './ScreenPage';
+// import { VoicePage } from './VoicePage';
+// import { ScreenPage } from './ScreenPage';
 import { SettingsPage } from './SettingsPage';
 import { ImportPage } from './ImportPage';
 import { DebugPage } from './DebugPage';
@@ -64,16 +64,16 @@ export struct PostOnboardingTabs {
           ConnectPage({ viewModel: this.viewModel });
         } else if (this.activeTab === 1) {
           ChatPage({ viewModel: this.viewModel });
-        } else if (this.activeTab === 2) {
-          VoicePage({ viewModel: this.viewModel });
-        } else if (this.activeTab === 3) {
-          ScreenPage({ viewModel: this.viewModel });
+        // } else if (this.activeTab === 2) {
+        //   VoicePage({ viewModel: this.viewModel });
+        // } else if (this.activeTab === 3) {
+        //   ScreenPage({ viewModel: this.viewModel });
         } else if (this.activeTab === 4) {
           SettingsPage({ viewModel: this.viewModel });
-        } else if (this.activeTab === 5) {
-          ImportPage({ viewModel: this.viewModel });
-        } else if (this.activeTab === 6) {
-          DebugPage({ viewModel: this.viewModel });
+        // } else if (this.activeTab === 5) {
+        //   ImportPage({ viewModel: this.viewModel });
+        // } else if (this.activeTab === 6) {
+        //   DebugPage({ viewModel: this.viewModel });
         }
       }
       .width('100%')
@@ -91,10 +91,18 @@ export struct PostOnboardingTabs {
 
   @Builder StatusBar() {
     Row() {
-      Text('IntentX Agent')
-        .fontSize(20)
-        .fontWeight(FontWeight.Bold)
-        .fontColor('#17181C');
+      Row({ space: 10 }) {
+        Image($r('app.media.intentx_logo'))
+          .width(32)
+          .height(32)
+          .borderRadius(10)
+          .objectFit(ImageFit.Cover);
+
+        Text('IntentX Agent')
+          .fontSize(20)
+          .fontWeight(FontWeight.Bold)
+          .fontColor('#17181C');
+      }
 
       Blank();
 
@@ -123,11 +131,11 @@ export struct PostOnboardingTabs {
     Row() {
       this.TabItem(0, this.localizedText('tab_connect', 'Connect'), '🔗');
       this.TabItem(1, this.localizedText('tab_chat', 'Chat'), '💬');
-      this.TabItem(2, this.localizedText('tab_voice', 'Voice'), '🎙️');
-      this.TabItem(3, this.localizedText('tab_screen', 'Screen'), '🖥️');
+      // this.TabItem(2, this.localizedText('tab_voice', 'Voice'), '🎙️');
+      // this.TabItem(3, this.localizedText('tab_screen', 'Screen'), '🖥️');
       this.TabItem(4, this.localizedText('tab_settings', 'Settings'), '⚙️');
-      this.TabItem(5, this.localizedText('tab_import', 'Import'), '📥');
-      this.TabItem(6, this.localizedText('tab_debug', 'Debug'), '🔧');
+      // this.TabItem(5, this.localizedText('tab_import', 'Import'), '📥');
+      // this.TabItem(6, this.localizedText('tab_debug', 'Debug'), '🔧');
     }
     .width('100%')
     .padding({ left: 10, right: 10, top: 10, bottom: 10 })
