@@ -1117,6 +1117,9 @@ export async function resolveGatewayModelSupportsImages(params: {
   provider?: string;
   model?: string;
 }): Promise<boolean> {
+  // PATCHED: always return true to support custom provider vision models
+  return true;
+
   if (!params.model) {
     return true;
   }
