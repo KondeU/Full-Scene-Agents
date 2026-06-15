@@ -19,6 +19,11 @@ import {
   VoiceConversationEntry,
   ChatMessageContent
 } from '../model/GatewayModels';
+import { RawTurn, ReplayResult, UIBlock } from '../model/FlowModels';
+import { StreamUIAdapter } from '../service/StreamUIAdapter';
+import { A2UIParser } from '../service/A2UIParser';
+import { A2UIMapper } from '../service/A2UIMapper';
+import { A2UIScanResult, A2UIValidationError } from '../model/A2UIModels';
 
 export class CameraHudInfo {
   active: boolean = false;
@@ -94,6 +99,11 @@ export class MainViewModel {
   chatPendingInteractions: ChatPendingInteraction[] = [];
   chatSessions: ChatSessionEntry[] = [];
   pendingRunCount: number = 0;
+
+  /** 有序对话轮时间线（user/agent/tool），供 StreamUIAdapter 解析结构化 UI。 */
+  chatTurns: RawTurn[] = [];
+  /** 解析结果：结构化 UIBlock 序列 + 当前阶段。 */
+  chatFlow: ReplayResult = new ReplayResult();
 
   canvasCurrentUrl: string | null = null;
   canvasA2uiHydrated: boolean = false;
@@ -447,6 +457,10 @@ export class MainViewModel {
     this.chatError = null;
     this.chatSessionId = null;
     this.chatMessages = [];
+    this.chatTurns = [];
+    this.chatFlow = new ReplayResult();
+    this.a2uiBlocks = [];
+    this.a2uiAutoRetryUsed = false;
     this.notifyChatStateChanged();
 
     // 将连接端点写入文件，供 ShareReceiveExtension 等扩展能力读取
@@ -1022,6 +1036,11 @@ export class MainViewModel {
         this.upsertPendingToolCall(toolCall);
       } else if (phase === 'result') {
         this.removePendingToolCall(toolCallId);
+        // 捕获工具结果内容供 StreamUIAdapter 阶段检测 / 步骤识别（02 文档 §2/§4.4）
+        const resultContent = this.readToolResultContent(data);
+        if (resultContent.length > 0) {
+          this.appendChatTurn('tool', resultContent);
+        }
       }
       return;
     }
@@ -1784,6 +1803,7 @@ export class MainViewModel {
     }
 
     this.chatMessages = [...this.chatMessages, userMessage];
+    this.appendChatTurn('user', outgoingText);
     this.chatStreamingAssistantText = null;
     this.chatPendingToolCalls = [];
     this.chatPendingInteractions = [];
@@ -1899,6 +1919,7 @@ export class MainViewModel {
       const payload = this.readPayloadObject(response.payload);
       const historyMessages = this.parseChatHistoryMessages(payload);
       this.chatMessages = historyMessages;
+      this.rebuildChatTurnsFromHistory(historyMessages);
       this.chatSessionId = this.readOptionalString(payload, 'sessionId');
 
       const thinkingLevel = this.normalizeChatThinkingLevel(this.readOptionalString(payload, 'thinkingLevel'));
@@ -2112,7 +2133,135 @@ export class MainViewModel {
     }
 
     this.chatMessages = [...this.chatMessages, message];
+    if (message.role === 'assistant') {
+      this.appendChatTurn('agent', nextText);
+    }
     this.notifyChatStateChanged();
+  }
+
+  // ---------- 结构化流程时间线（A2UI 优先，文本解析兜底） ----------
+
+  /** A2UI 校验失败时的反馈，等待回灌给 LLM（每会话最多自动回灌一次，避免死循环）。 */
+  private pendingA2UIErrorFeedback: string = '';
+  private a2uiAutoRetryUsed: boolean = false;
+  /** 已渲染的 A2UI 结构化 block（持久，不被 reparse 清除）。按时间顺序追加。 */
+  private a2uiBlocks: UIBlock[] = [];
+
+  /**
+   * 追加一轮到时间线并重解析。仅 final 文本入时间线。
+   * agent 轮先扫描内联 A2UI：
+   *  - 有且全部有效 → 用映射出的结构化 block，文本残留作普通气泡；
+   *  - 有但校验失败 → 不渲染，记录错误反馈（directive 3），后续回灌 LLM；
+   *  - 无 → 维持原样（文本进 StreamUIAdapter 正则兜底）。
+   */
+  private appendChatTurn(role: string, content: string): void {
+    const trimmed = (content || '').trim();
+    if (trimmed.length === 0) {
+      return;
+    }
+
+    if (role === 'agent') {
+      const scan = A2UIParser.scan(trimmed);
+      if (scan.found) {
+        this.handleA2UIAgentTurn(scan);
+        return;
+      }
+    }
+
+    this.chatTurns = [...this.chatTurns, new RawTurn(role, trimmed)];
+    this.reparseChatFlow();
+  }
+
+  /** Agent 轮含内联 A2UI 的处理。 */
+  private handleA2UIAgentTurn(scan: A2UIScanResult): void {
+    if (scan.errors.length > 0) {
+      // 校验失败：不渲染卡片，把精确错误回灌给 LLM 让其重生成（directive 3）。
+      this.requestA2UIRegeneration(scan.errors);
+      // 残留文本（若有）仍按普通气泡呈现，保证不空屏。
+      if (scan.residualText.length > 0) {
+        this.chatTurns = [...this.chatTurns, new RawTurn('agent', scan.residualText)];
+        this.reparseChatFlow();
+      }
+      return;
+    }
+
+    // 校验通过：把 A2UI 映射成 UIBlock，持久保存（reparse 不清除）。
+    const blocks = A2UIMapper.toBlocks(scan.messages);
+    if (scan.residualText.length > 0) {
+      // 残留承接语作为前置气泡，进文本时间线。
+      this.chatTurns = [...this.chatTurns, new RawTurn('agent', scan.residualText)];
+    }
+    for (let i = 0; i < blocks.length; i++) {
+      this.a2uiBlocks.push(blocks[i]);
+    }
+    this.reparseChatFlow();
+    this.a2uiAutoRetryUsed = false;
+    this.notifyChatStateChanged();
+  }
+
+  /** 组织校验错误并自动回灌 LLM 一次。 */
+  private requestA2UIRegeneration(errors: A2UIValidationError[]): void {
+    const lines: string[] = [];
+    for (let i = 0; i < errors.length && i < 8; i++) {
+      lines.push('- ' + errors[i].path + ': ' + errors[i].message);
+    }
+    const feedback = 'A2UI 校验未通过，请仅修正以下问题并重新输出单条 ```a2ui 代码块（catalogId 必须是 '
+      + 'intentx.app:cards@1，组件只能用 ClarifyQuestion/ApproachProposal/PlanConfirm/SkillCreate/ExecuteSummary/AgentText）：\n'
+      + lines.join('\n');
+    this.pendingA2UIErrorFeedback = feedback;
+    console.warn('MainViewModel: A2UI validation failed:\n' + feedback);
+
+    // 自动回灌一次（避免无限循环）。仅在已连接且空闲时。
+    if (!this.a2uiAutoRetryUsed && this.isConnected && this.pendingRunCount === 0) {
+      this.a2uiAutoRetryUsed = true;
+      this.sendChat(feedback, this.chatThinkingLevel, []);
+    }
+  }
+
+  private reparseChatFlow(): void {
+    const parsed = StreamUIAdapter.parseTurns(this.chatTurns);
+    // 持久的 A2UI 结构化 block 追加在文本解析结果之后（结构化优先，不被正则覆盖）。
+    if (this.a2uiBlocks.length > 0) {
+      const merged: UIBlock[] = [...parsed.blocks, ...this.a2uiBlocks];
+      parsed.blocks = merged;
+      const lastPhase = this.a2uiBlocks[this.a2uiBlocks.length - 1].phase;
+      if (lastPhase.length > 0) {
+        parsed.finalPhase = lastPhase;
+      }
+    }
+    this.chatFlow = parsed;
+  }
+
+  /** 用整段历史重建时间线（loadChat 后调用）。 */
+  private rebuildChatTurnsFromHistory(messages: ChatMessage[]): void {
+    const turns: RawTurn[] = [];
+    this.a2uiBlocks = [];
+    this.a2uiAutoRetryUsed = false;
+    for (let i = 0; i < messages.length; i++) {
+      const msg = messages[i];
+      const text = this.stringifyChatMessageContent(msg);
+      if (text.length === 0) {
+        continue;
+      }
+      const role = msg.role === 'user' ? 'user' : (msg.role === 'tool' ? 'tool' : 'agent');
+      // 历史里的 agent 文本同样可能内联 A2UI：扫描并映射，残留文本入时间线。
+      if (role === 'agent') {
+        const scan = A2UIParser.scan(text);
+        if (scan.found && scan.errors.length === 0) {
+          if (scan.residualText.length > 0) {
+            turns.push(new RawTurn('agent', scan.residualText));
+          }
+          const blocks = A2UIMapper.toBlocks(scan.messages);
+          for (let b = 0; b < blocks.length; b++) {
+            this.a2uiBlocks.push(blocks[b]);
+          }
+          continue;
+        }
+      }
+      turns.push(new RawTurn(role, text));
+    }
+    this.chatTurns = turns;
+    this.reparseChatFlow();
   }
 
   private stringifyChatMessageContent(message: ChatMessage): string {
@@ -2147,6 +2296,51 @@ export class MainViewModel {
 
     const message = this.readNestedObject(data, 'message');
     return this.parseAssistantDeltaText(message);
+  }
+
+  /** 从 tool result 事件 data 中提取文本内容（skill frontmatter / 写入回执 / 报错）。 */
+  private readToolResultContent(data: Record<string, Object | string>): string {
+    // 常见字段优先：result.content / result / content / output / text
+    const result = this.readNestedObject(data, 'result');
+    const fromResult = this.extractTextFromValue(result['content']) || this.readOptionalString(result, 'text')
+      || this.readOptionalString(result, 'output');
+    if (fromResult.length > 0) {
+      return fromResult;
+    }
+    const direct = this.extractTextFromValue(data['content']) || this.readOptionalString(data, 'output')
+      || this.readOptionalString(data, 'text');
+    if (direct.length > 0) {
+      return direct;
+    }
+    // 兜底：序列化 result 对象（用于 JSON 工具错误 §4.4）
+    if (Object.keys(result).length > 0) {
+      return JSON.stringify(result);
+    }
+    return '';
+  }
+
+  /** content 可能是 string，或 [{type,text}] / {text} 结构。 */
+  private extractTextFromValue(value: Object | string | undefined): string {
+    if (!value) {
+      return '';
+    }
+    if (typeof value === 'string') {
+      return value;
+    }
+    if (Array.isArray(value)) {
+      const items = value as Array<Object>;
+      const parts: string[] = [];
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i] as Record<string, Object | string>;
+        const t = this.readOptionalString(item, 'text');
+        if (t.length > 0) {
+          parts.push(t);
+        }
+      }
+      return parts.join('\n');
+    }
+    const obj = value as Record<string, Object | string>;
+    return this.readOptionalString(obj, 'text');
   }
 
   private parseChatMessageContent(contentValue: Object | string | undefined): ChatMessageContent[] {

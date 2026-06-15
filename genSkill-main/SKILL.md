@@ -17,6 +17,7 @@ is needed before the first question, so the conversation starts immediately.
 - If no goal is present, ask exactly: `你想把哪件常做的事保存成以后能直接用的做法？`
 - Keep the conversation in the user's language throughout.
 - Never say "Agent", "Skill", "Planner", "GenSkill", "schema", "runtime", "tool registry", or "frontmatter" to the user.
+- **Structured UI (optional):** if the client advertises support for catalog `intentx.app:cards@1`, read `references/a2ui-emit-guide.md` and emit the structured card for each structured moment (clarify question, approach choice, plan confirm, skill-create progress, execute summary) instead of the prose form. If it does not, behave exactly as written below (plain text). The card carries the same content and sends the same answer back — never change the questioning logic, only its rendering.
 
 **Do not read any reference file to ask the first question.** Goal clarification
 and the first narrowing questions are about the user's own behavior, not system
