@@ -1,0 +1,203 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "intentx.app:cards@1",
+  "title": "IntentX Cards Catalog (A2UI 0.9 custom catalog)",
+  "description": "A custom A2UI catalog whose components are the 6 prebuilt native cards rendered by intentXApp ChatPage. This catalog intentionally does NOT include any A2UI standard components (Text/Row/Column/Button/etc). The agent emits a single root component per surface; the client maps it directly to a native ArkTS card. catalogId for createSurface messages: 'intentx.app:cards@1'.",
+  "$defs": {
+    "anyComponent": {
+      "oneOf": [
+        { "$ref": "#/$defs/ClarifyQuestion" },
+        { "$ref": "#/$defs/ApproachProposal" },
+        { "$ref": "#/$defs/PlanConfirm" },
+        { "$ref": "#/$defs/SkillCreate" },
+        { "$ref": "#/$defs/ExecuteSummary" },
+        { "$ref": "#/$defs/AgentText" }
+      ],
+      "discriminator": { "propertyName": "component" }
+    },
+
+    "ClarifyOption": {
+      "type": "object",
+      "description": "One mutually-exclusive choice. label is a short title; description is the lighter sub-line under it.",
+      "properties": {
+        "id": { "type": "string", "description": "Stable option id, usually the displayed number (\"1\"/\"2\"/\"3\")." },
+        "label": { "type": "string", "description": "Short option title. Keep it short; put any explanation in description." },
+        "description": { "type": "string", "description": "Optional lighter explanation rendered below the label." }
+      },
+      "required": ["id", "label"],
+      "additionalProperties": false
+    },
+    "ClarifyQuestion": {
+      "type": "object",
+      "description": "Intent-clarification single-select card (genSkill Phase 1). At most 3 mutually-exclusive options. The chosen option's label is sent back as the user's reply via the userAction.",
+      "properties": {
+        "id": { "type": "string" },
+        "component": { "const": "ClarifyQuestion" },
+        "phase": { "const": "clarify" },
+        "questionIndex": { "type": "integer", "minimum": 1, "description": "1-based index of this question." },
+        "totalQuestions": { "type": "integer", "minimum": 1, "description": "Total questions in this clarification round." },
+        "preamble": { "type": "string", "description": "Optional lead-in sentence shown above the question." },
+        "question": { "type": "string", "description": "The question text (ends with ？/?)." },
+        "options": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 3,
+          "items": { "$ref": "#/$defs/ClarifyOption" }
+        },
+        "action": {
+          "type": "object",
+          "description": "Dispatched on confirm. context carries { optionId, optionLabel }; the client sends optionLabel back to the agent as the user's reply.",
+          "properties": { "name": { "type": "string" } },
+          "required": ["name"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["id", "component", "phase", "question", "options", "action"],
+      "additionalProperties": false
+    },
+
+    "Approach": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Approach letter, \"A\"/\"B\"/\"C\"." },
+        "title": { "type": "string" },
+        "body": { "type": "string", "description": "Short rationale / trade-offs." }
+      },
+      "required": ["id", "title"],
+      "additionalProperties": false
+    },
+    "ApproachProposal": {
+      "type": "object",
+      "description": "Approach-selection card that ends Phase 1. 2-3 approaches with an optional recommended one. On confirm, the chosen approach letter is sent back.",
+      "properties": {
+        "id": { "type": "string" },
+        "component": { "const": "ApproachProposal" },
+        "phase": { "const": "clarify" },
+        "preamble": { "type": "string" },
+        "approaches": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 3,
+          "items": { "$ref": "#/$defs/Approach" }
+        },
+        "recommendedId": { "type": "string", "description": "Id of the recommended approach, if any." },
+        "action": {
+          "type": "object",
+          "properties": { "name": { "type": "string" } },
+          "required": ["name"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["id", "component", "phase", "approaches", "action"],
+      "additionalProperties": false
+    },
+
+    "PlanItem": {
+      "type": "object",
+      "properties": {
+        "label": { "type": "string", "description": "Plain-language dimension, e.g. \"你给我\"/\"我会\"/\"开始方式\"." },
+        "value": { "type": "string" }
+      },
+      "required": ["label", "value"],
+      "additionalProperties": false
+    },
+    "PlanConfirm": {
+      "type": "object",
+      "description": "Plan-confirmation card (genSkill writing-plans). Confirm sends \"可以\"; Modify focuses the composer.",
+      "properties": {
+        "id": { "type": "string" },
+        "component": { "const": "PlanConfirm" },
+        "phase": { "const": "customize" },
+        "taskTitle": { "type": "string" },
+        "items": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/PlanItem" }
+        },
+        "question": { "type": "string", "description": "Confirmation prompt, e.g. \"这样创建可以吗？\"." },
+        "confirmAction": {
+          "type": "object",
+          "properties": { "name": { "type": "string" } },
+          "required": ["name"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["id", "component", "phase", "taskTitle", "items", "question", "confirmAction"],
+      "additionalProperties": false
+    },
+
+    "SkillStep": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "status": { "type": "string", "enum": ["done", "error"] },
+        "label": { "type": "string", "description": "e.g. \"写入 collect-screenshots/SKILL.md\"." },
+        "detail": { "type": "string", "description": "Optional raw output, shown in a collapsible terminal block (errors)." }
+      },
+      "required": ["id", "status", "label"],
+      "additionalProperties": false
+    },
+    "SkillCreate": {
+      "type": "object",
+      "description": "Skill-creation progress card (genSkill writing-skills). Aggregates file-write steps; errors are collapsed and do not block.",
+      "properties": {
+        "id": { "type": "string" },
+        "component": { "const": "SkillCreate" },
+        "phase": { "const": "create" },
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/SkillStep" }
+        },
+        "annotations": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Short status notes shown under the steps."
+        }
+      },
+      "required": ["id", "component", "phase", "steps"],
+      "additionalProperties": false
+    },
+
+    "ExecuteSummary": {
+      "type": "object",
+      "description": "Final summary card (genSkill execute). Lists created skill paths, usage steps, and an optional CTA.",
+      "properties": {
+        "id": { "type": "string" },
+        "component": { "const": "ExecuteSummary" },
+        "phase": { "const": "execute" },
+        "intro": { "type": "string" },
+        "skillPaths": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" }
+        },
+        "usageSteps": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "cta": { "type": "string", "description": "Optional call-to-action label." },
+        "ctaAction": {
+          "type": "object",
+          "properties": { "name": { "type": "string" } },
+          "required": ["name"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["id", "component", "phase", "skillPaths"],
+      "additionalProperties": false
+    },
+
+    "AgentText": {
+      "type": "object",
+      "description": "Fallback plain-text bubble. Use only when no structured card fits; markdown subset (bold, lists).",
+      "properties": {
+        "id": { "type": "string" },
+        "component": { "const": "AgentText" },
+        "markdown": { "type": "string" }
+      },
+      "required": ["id", "component", "markdown"],
+      "additionalProperties": false
+    }
+  }
+}

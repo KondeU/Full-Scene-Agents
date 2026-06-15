@@ -1,22 +1,30 @@
 import { MainViewModel } from '../viewmodel/MainViewModel';
 import { ChatChoiceOption, ChatMessage, ChatPendingInteraction, ChatPendingInteractionChoice, ChatPendingToolCall, ChatSessionEntry } from '../model/GatewayModels';
+import { UIBlock } from '../model/FlowModels';
+import { FlowProgressBar } from '../components/flow/FlowProgressBar';
+import { IntentClarifyCard } from '../components/flow/IntentClarifyCard';
+import { ApproachProposalCard } from '../components/flow/ApproachProposalCard';
+import { PlanConfirmCard } from '../components/flow/PlanConfirmCard';
+import { SkillCreateCard } from '../components/flow/SkillCreateCard';
+import { ExecuteSummaryCard } from '../components/flow/ExecuteSummaryCard';
 import { Markdown, MarkdownController } from '@luvi/lv-markdown-in';
 import { pasteboard } from '@kit.BasicServicesKit';
 
-// Design palette (v0 design spec, oklch -> sRGB)
-const C_BG: string = '#F3F5F8';
+// Design palette — chat-ux v0 design spec (Docs/01 §2, oklch -> sRGB)
+const C_BG: string = '#F7F8FA';
 const C_CARD: string = '#FFFFFF';
-const C_PRIMARY: string = '#2B62EF';
+const C_PRIMARY: string = '#2563EB';
 const C_PRIMARY_SOFT: string = '#6E92F4';
-const C_ACCENT: string = '#E1ECFF';
+const C_ACCENT: string = '#DBEAFE';
 const C_ACCENT_FG: string = '#1E49B7';
 const C_MUTED: string = '#EFF2F5';
-const C_MUTED_FG: string = '#6B727A';
+const C_MUTED_FG: string = '#6B7280';
 const C_FOREGROUND: string = '#14181C';
-const C_BORDER: string = '#DFE1E4';
+const C_BORDER: string = '#E2E5EA';
 const C_SUCCESS_SOFT: string = '#E4F6E9';
-const C_USER_BUBBLE: string = '#ADE9B8';
-const C_USER_TEXT: string = '#1A3520';
+const C_USER_BUBBLE: string = '#2563EB';
+const C_USER_TEXT: string = '#FFFFFF';
+const C_INPUT_BG: string = '#EFF4FF';
 
 @Component
 export struct ChatPage {
@@ -42,6 +50,10 @@ export struct ChatPage {
   @State composerInputVisible: boolean = true;
   @State latestAssistantChoiceOptionsState: ChatChoiceOption[] = [];
   @State pendingInteractionsState: ChatPendingInteraction[] = [];
+  // chat-ux 结构化流程
+  @State flowBlocksState: UIBlock[] = [];
+  @State flowPhaseState: string = '';
+  @State flowTotalQuestionsState: number = 1;
 
   private chatStateListenerId: number = -1;
   private messageScroller: Scroller = new Scroller();
@@ -209,6 +221,18 @@ export struct ChatPage {
       Column({ space: 10 }) {
         if (this.chatMessagesState.length === 0) {
           this.EmptyState();
+        } else if (this.hasStructuredFlow()) {
+          this.FlowTimeline();
+
+          if (this.chatStreamingTextState.length > 0) {
+            this.StreamingMessage(this.chatStreamingTextState);
+          }
+          if (this.chatPendingToolCallsState.length > 0) {
+            this.PendingToolCallsRail();
+          }
+          if (this.pendingInteractionsState.length > 0) {
+            this.PendingInteractionCards(this.pendingInteractionsState);
+          }
         } else {
           ForEach(this.chatMessagesState, (message: ChatMessage) => {
             this.MessageItem(message);
@@ -236,6 +260,194 @@ export struct ChatPage {
     }
     .width('100%')
     .layoutWeight(1);
+  }
+
+  // ---------- chat-ux 结构化流程时间线 ----------
+
+  private hasStructuredFlow(): boolean {
+    for (let i = 0; i < this.flowBlocksState.length; i++) {
+      const k = this.flowBlocksState[i].kind;
+      if (k === 'clarify-question' || k === 'approach-proposal' || k === 'plan-confirm'
+        || k === 'skill-create' || k === 'exec-summary') {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // 工作流是否仍激活（用于决定卡片可否交互）
+  private flowActive(): boolean {
+    return this.flowPhaseState.length > 0;
+  }
+
+  @Builder FlowTimeline() {
+    Column({ space: 10 }) {
+      ForEach(this.flowBlocksState, (block: UIBlock, index: number) => {
+        // 阶段切换处插入进度条快照（参照 ReplayView）
+        if (this.shouldShowBarBefore(index)) {
+          FlowProgressBar({ activePhase: block.phase })
+            .margin({ top: 4, bottom: 2 });
+        }
+        this.FlowBlock(block, index);
+      }, (block: UIBlock, index: number) => this.flowBlockKey(block, index));
+    }
+    .width('100%');
+  }
+
+  private shouldShowBarBefore(index: number): boolean {
+    if (index < 0 || index >= this.flowBlocksState.length) {
+      return false;
+    }
+    const phase = this.flowBlocksState[index].phase;
+    if (phase.length === 0) {
+      return false;
+    }
+    if (index === 0) {
+      return true;
+    }
+    return this.flowBlocksState[index - 1].phase !== phase;
+  }
+
+  private flowBlockKey(block: UIBlock, index: number): string {
+    return block.kind + '|' + String(index) + '|' + block.phase + '|' + block.selectedId
+      + '|' + (block.approved ? '1' : '0') + '|' + String(block.steps.length);
+  }
+
+  // 最后一个同类卡片是否为可交互目标（仅工作流激活且不在运行中时）
+  private isLiveBlock(block: UIBlock, index: number): boolean {
+    if (!this.flowActive() || this.pendingRunCountState > 0 || !this.chatHealthOkState) {
+      return false;
+    }
+    // 只有时间线中最后一个 block 才是“当前”待回答项
+    return index === this.flowBlocksState.length - 1;
+  }
+
+  @Builder FlowBlock(block: UIBlock, index: number) {
+    if (block.kind === 'user-text') {
+      this.FlowUserBubble(block.text, '');
+    } else if (block.kind === 'user-option-answer') {
+      this.FlowUserBubble(block.text, block.index);
+    } else if (block.kind === 'agent-text') {
+      this.FlowAgentBubble(block.markdown);
+    } else if (block.kind === 'clarify-question') {
+      Row() {
+        IntentClarifyCard({
+          block: block,
+          totalQuestions: this.flowTotalQuestionsState,
+          isLocked: !this.isLiveBlock(block, index),
+          canInteract: this.isLiveBlock(block, index),
+          onConfirmOption: (id: string, label: string) => {
+            this.sendFlowOption(label);
+          }
+        })
+          .width('86%');
+        Blank().layoutWeight(1);
+      }
+      .width('100%');
+    } else if (block.kind === 'approach-proposal') {
+      Row() {
+        ApproachProposalCard({
+          block: block,
+          isLocked: !this.isLiveBlock(block, index),
+          canInteract: this.isLiveBlock(block, index),
+          onConfirmOption: (id: string, label: string) => {
+            this.sendFlowOption(id);
+          }
+        })
+          .width('86%');
+        Blank().layoutWeight(1);
+      }
+      .width('100%');
+    } else if (block.kind === 'plan-confirm') {
+      Row() {
+        PlanConfirmCard({
+          block: block,
+          isLocked: !this.isLiveBlock(block, index),
+          canInteract: this.isLiveBlock(block, index),
+          onConfirm: () => {
+            this.sendFlowOption('可以');
+          },
+          onModify: () => {
+            this.composerInputVisible = true;
+          }
+        })
+          .width('86%');
+        Blank().layoutWeight(1);
+      }
+      .width('100%');
+    } else if (block.kind === 'skill-create') {
+      Row() {
+        SkillCreateCard({ block: block })
+          .width('86%');
+        Blank().layoutWeight(1);
+      }
+      .width('100%');
+    } else if (block.kind === 'exec-summary') {
+      Row() {
+        ExecuteSummaryCard({
+          block: block,
+          canInteract: this.chatHealthOkState && this.pendingRunCountState === 0,
+          onCta: () => {
+            this.showSkillLaunchers = false;
+          }
+        })
+          .width('86%');
+        Blank().layoutWeight(1);
+      }
+      .width('100%');
+    }
+  }
+
+  @Builder FlowUserBubble(text: string, badge: string) {
+    Row({ space: 8 }) {
+      Blank().layoutWeight(1);
+      Row({ space: 8 }) {
+        if (badge.length > 0) {
+          Stack({ alignContent: Alignment.Center }) {
+            Circle().width(18).height(18).fill('#FFFFFF55');
+            Text(badge)
+              .fontSize(11)
+              .fontWeight(FontWeight.Bold)
+              .fontColor('#FFFFFF');
+          }
+          .width(18)
+          .height(18);
+        }
+        Text(text)
+          .fontSize(15)
+          .fontColor('#FFFFFF')
+          .lineHeight(21);
+      }
+      .constraintSize({ maxWidth: '80%' })
+      .padding({ left: 14, right: 14, top: 10, bottom: 10 })
+      .backgroundColor(C_PRIMARY)
+      .borderRadius({ topLeft: 18, topRight: 18, bottomLeft: 18, bottomRight: 6 });
+    }
+    .width('100%');
+  }
+
+  @Builder FlowAgentBubble(markdown: string) {
+    Row() {
+      Column() {
+        this.MarkdownMessage(markdown, false);
+      }
+      .constraintSize({ maxWidth: '86%' })
+      .padding({ left: 14, right: 14, top: 10, bottom: 10 })
+      .backgroundColor(C_CARD)
+      .borderRadius({ topLeft: 18, topRight: 18, bottomLeft: 6, bottomRight: 18 })
+      .border({ width: 1, color: C_BORDER });
+      Blank().layoutWeight(1);
+    }
+    .width('100%');
+  }
+
+  private sendFlowOption(payload: string): void {
+    const text = (payload || '').trim();
+    if (text.length === 0 || this.pendingRunCountState > 0 || !this.chatHealthOkState) {
+      return;
+    }
+    this.suppressComposerInputFocusRestore();
+    this.viewModel.sendChat(text, this.chatThinkingLevelState, []);
   }
 
   @Builder EmptyState() {
@@ -622,9 +834,8 @@ export struct ChatPage {
       }
       .width('100%')
       .padding({ left: 6, right: 6, top: 6, bottom: 6 })
-      .backgroundColor(C_CARD)
-      .borderRadius(20)
-      .shadow({ radius: 10, color: '#0F000000', offsetX: 0, offsetY: 2 });
+      .backgroundColor(C_INPUT_BG)
+      .borderRadius(20);
     }
     .width('100%')
     .padding({ top: 8, bottom: 10 })
@@ -655,7 +866,7 @@ export struct ChatPage {
           Column({ space: 4 }) {
             Text('🧩')
               .fontSize(22);
-            Text('genSkills')
+            Text('个性化任务')
               .fontSize(12)
               .fontWeight(FontWeight.Bold)
               .fontColor(C_FOREGROUND);
@@ -875,6 +1086,9 @@ export struct ChatPage {
     this.chatSessionsState = [...this.viewModel.chatSessions];
     this.pendingRunCountState = this.viewModel.pendingRunCount;
     this.pendingInteractionsState = [...this.viewModel.chatPendingInteractions];
+    this.flowBlocksState = [...this.viewModel.chatFlow.blocks];
+    this.flowPhaseState = this.viewModel.chatFlow.finalPhase;
+    this.flowTotalQuestionsState = this.viewModel.chatFlow.totalQuestions;
     this.latestAssistantChoiceOptionsState = this.pendingInteractionsState.length === 0 ? this.extractChoiceOptions(this.latestAssistantText()) : [];
     if (wasPending && this.pendingRunCountState === 0) {
       this.restoreComposerInputAfterRun();
@@ -955,7 +1169,9 @@ export struct ChatPage {
     const scrollToken = String(this.chatMessagesState.length) +
       '|' + this.chatStreamingTextState +
       '|' + String(this.chatPendingToolCallsState.length) +
-      '|' + String(this.pendingInteractionsState.length);
+      '|' + String(this.pendingInteractionsState.length) +
+      '|' + String(this.flowBlocksState.length) +
+      '|' + this.flowPhaseState;
     if (scrollToken === this.lastScrollToken) {
       return;
     }

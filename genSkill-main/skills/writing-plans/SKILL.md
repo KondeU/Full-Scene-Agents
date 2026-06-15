@@ -82,7 +82,7 @@ If the sub-skills need wiring (timing, bindings), add an `orchestration` block:
 
 `bindings` entries map a trigger source to an Ability (`{ trigger, ability }`) or to a target skill (`{ trigger, target_skill }`).
 
-Every capability in any `capabilities_used` must be listed under **Supported** in `references/capabilities-summary.md`. Do not include disabled capabilities.
+Every capability in any `capabilities_used` must be listed under **Supported** in `../genSkill/references/capabilities-summary.md`. Do not include disabled capabilities.
 
 ## Step 2: Translate to Plain Language
 
@@ -128,7 +128,7 @@ anything it flags. This is the default and works in every runtime.
 > on. The review is a self-check, not a hand-off.
 
 Check, at minimum: every top-level field filled (no empty/"TBD"); every
-capability ID is Supported in `references/capabilities-summary.md`; each
+capability ID is Supported in `../genSkill/references/capabilities-summary.md`; each
 `consumes` edge's upstream `produces_shape` carries the fields the consumer
 needs; the plain-language text leaks no system terms or capability IDs; the two
 representations match.

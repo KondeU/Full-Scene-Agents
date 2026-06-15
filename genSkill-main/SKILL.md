@@ -17,6 +17,7 @@ is needed before the first question, so the conversation starts immediately.
 - If no goal is present, ask exactly: `你想把哪件常做的事保存成以后能直接用的做法？`
 - Keep the conversation in the user's language throughout.
 - Never say "Agent", "Skill", "Planner", "GenSkill", "schema", "runtime", "tool registry", or "frontmatter" to the user.
+- **Structured UI (optional):** if the client advertises support for catalog `intentx.app:cards@1`, read `references/a2ui-emit-guide.md` and emit the structured card for each structured moment (clarify question, approach choice, plan confirm, skill-create progress, execute summary) instead of the prose form. If it does not, behave exactly as written below (plain text). The card carries the same content and sends the same answer back — never change the questioning logic, only its rendering.
 
 **Do not read any reference file to ask the first question.** Goal clarification
 and the first narrowing questions are about the user's own behavior, not system
@@ -97,8 +98,48 @@ then input alone, then output alone.
 User states goal
   → Is the goal clear enough to start asking details?
     → No: ask one question to sharpen the goal
-    → Yes: begin narrowing questions
+    → Yes: run Step 0 (reuse check) below, then begin narrowing questions
 
+For each turn:
+```
+
+### Step 0 — Check for an Existing 做法 (reuse before creating)
+
+Run this **once**, after the goal is clear enough to describe and **before** the
+first narrowing question. It stops the flow from rebuilding a workflow the user
+already saved.
+
+1. List what's already saved:
+   `node scripts/generate-skill.cjs --list --target <运行时平台>`
+   (platform = the runtime this is running in; default `codex`). This is internal
+   plumbing — never mention the command or platform to the user.
+2. Judge whether any returned skill is **semantically close** to the user's goal.
+   Prefer each entry's `flow` (the plain-language 做法流程); if `flow` is null
+   (older skills), fall back to its `description`. Matching is your judgment — the
+   script does not decide it.
+3. **No close match → say nothing about this.** Go straight to the narrowing
+   questions as if Step 0 never ran. Do not announce "没找到类似的做法".
+4. **Close match → show it and ask one question** (obeys Hard Rule 2: one question,
+   ≤3 mutually-exclusive numbered choices). Present the matched skill's `flow`
+   verbatim (or a one-line summary built from `description` if `flow` is null),
+   introduced only as "我之前好像存过一个类似的做法":
+
+   ```
+   我之前好像存过一个类似的做法：
+
+   <flow.md 内容，或由 description 概括的一句话>
+
+   1. 就用这个
+   2. 不太一样，重新做一个
+   ```
+5. User picks **1 (就用这个)** → do **not** continue to writing-plans. Phase 1 ends
+   here: route directly to `genSkill:execute` for an optional first-run of that
+   existing workflow (its plan-slug directory + `orchestration.json` are already on
+   disk).
+6. User picks **2 (重新做一个)** → drop the reuse path and begin the normal
+   narrowing questions to create a new workflow.
+
+```
 For each turn:
   1. Identify the single biggest gap in your understanding
   2. Formulate one question closing that gap — ONE dimension only
@@ -144,7 +185,14 @@ Keep the summary as the single source of truth — do not copy it inline anywher
 
 ## Phase 1 Exit Condition
 
-Phase 1 is complete when:
+Phase 1 is complete via **one** of two paths:
+
+**Reuse path** (Step 0 found a close match and the user chose 就用这个):
+1. The matched existing workflow's 做法流程 was shown and the user confirmed reuse
+
+**Next step**: Invoke `genSkill:execute` directly against that existing workflow — skip writing-plans and writing-skills.
+
+**Create path** (no match, or the user chose 重新做一个):
 1. All five gaps (goal, trigger, inputs, output, failure) are answered — each asked as its own question
 2. You have proposed 2-3 approaches
 3. The user has picked one approach
