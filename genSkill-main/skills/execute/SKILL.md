@@ -7,6 +7,10 @@ description: Use after a skill is successfully generated. Offers the user an opt
 
 Let the user see the just-created skill working once, immediately after generation.
 
+Reference files are shared from the entry skill directory. If this phase ever
+needs a reference file, read it from `../genSkill/references/...`; do not expect
+a local `references/` directory under `genSkill-execute`.
+
 ## Precondition
 
 This skill may be invoked in **either** case:

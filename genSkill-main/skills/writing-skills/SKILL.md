@@ -69,7 +69,7 @@ Write the approved plan JSON to a temp file. Shape (sub-skills are lightweight �
 ### 2. Run the Planning Script
 
 ```bash
-node scripts/generate-skill.cjs --plan <path-to-plan.json> --target <platform> --write
+node ../genSkill/scripts/generate-skill.cjs --plan <path-to-plan.json> --target <platform> --write
 ```
 
 Targets: `codex` (`~/.codex/skills/`), `openclaw` (`~/.openclaw/skills/`), `hermes` (`~/.hermes/skills/productivity/`). Use the platform matching the runtime; default to `codex`.
@@ -94,7 +94,7 @@ The script does NOT write any SKILL.md. With `--write` it creates the skill dire
 
 For every item in `skills[]`, write a complete SKILL.md to its `output_path`. This is the real work — do it one skill at a time, in the order given (producers before consumers).
 
-**Before writing your first skill of a workflow, read `references/authoring-good-skills.md` (the craft layer) and `references/authoring-good-skills-example.md` (a complete worked skill to match).** They are how you turn a high-level sub-task into a runbook an Agent can follow with no other context.
+**Before writing your first skill of a workflow, read `../genSkill/references/authoring-good-skills.md` (the craft layer) and `../genSkill/references/authoring-good-skills-example.md` (a complete worked skill to match).** They are how you turn a high-level sub-task into a runbook an Agent can follow with no other context.
 
 Required frontmatter:
 
@@ -154,7 +154,7 @@ If `skipped[]` is non-empty, reflect the dropped part honestly in line 6.
 
 ## Authoring Quality Bar
 
-These are the judgment calls that make a generated skill actually usable. The script can't make them — you must. The full craft (with a worked example) is in `references/authoring-good-skills.md`; the essentials:
+These are the judgment calls that make a generated skill actually usable. The script can't make them — you must. The full craft (with a worked example) is in `../genSkill/references/authoring-good-skills.md`; the essentials:
 
 - **Description = when to use, not what it does.** Start with "Use when…" and describe only triggering conditions. Never summarize the workflow in the description: testing shows an Agent will follow the description and skip the body, so a workflow summary there causes the body to be ignored. (This is the one rule worth borrowing from superpowers/writing-skills.)
 - **Name by action, verb-first.** `import-data`, not `data-import`. The slug is already set; make the `# heading` and prose match that voice.
@@ -172,7 +172,7 @@ The script hard-blocks always-forbidden capabilities, but you must never author 
 If you cannot run the script:
 - Show the approved plan JSON and the command the user can run.
 - Explain: "我没法直接执行脚本，你可以手动运行这个命令，然后我来把每个做法写好。"
-- You can still author the SKILL.md bodies; you just won't have the script's gating/ordering, so check capabilities yourself: use `references/capabilities-summary.md` to confirm supported/disabled, then read the specific `references/capabilities/<file>.md` only for the exact 边界 wording of the capabilities this plan uses.
+- You can still author the SKILL.md bodies; you just won't have the script's gating/ordering, so check capabilities yourself: use `../genSkill/references/capabilities-summary.md` to confirm supported/disabled, then read the specific `../genSkill/references/capabilities/<file>.md` only for the exact 边界 wording of the capabilities this plan uses.
 
 ## Exit Condition
 

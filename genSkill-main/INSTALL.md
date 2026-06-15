@@ -69,19 +69,20 @@ done
 > 目录名用 `genSkill-<phase>` 只是为了在扁平命名空间里不撞名；每个 SKILL.md
 > 内部的 `name:`（如 `genSkill:writing-plans`）才是路由真正认的标识，保持不动。
 
-### 2. 让 writing-skills 能找到脚本和能力清单
+### 2. 把脚本和能力清单集中放到入口 Skill 下
 
-`writing-skills` 阶段会运行 `scripts/generate-skill.cjs`，它还会读
-`references/capabilities/`。把脚本和 references 一起带过去，并让命令指向 `.cjs`：
+入口 Skill 目录 `genSkill/` 是共享支持目录：只在这里放一份 `scripts/` 和
+`references/`。其他阶段目录通过 `../genSkill/references/...` 读取能力清单，
+并通过 `../genSkill/scripts/generate-skill.cjs` 调用脚本。
 
 ```bash
-cp -R scripts "$OPENCLAW_SKILLS/genSkill-writing-skills/scripts"
-cp -R references "$OPENCLAW_SKILLS/genSkill-writing-skills/references"
+cp -R scripts "$OPENCLAW_SKILLS/genSkill/scripts"
+cp -R references "$OPENCLAW_SKILLS/genSkill/references"
 ```
 
 > 脚本用 `path.resolve(__dirname, "..", "references", "capabilities")` 定位能力清单，
-> 即它要求 `scripts/` 和 `references/` 是**同级目录**。上面把两者都放进
-> `genSkill-writing-skills/` 下，正好满足这个相对关系。
+> 即它要求 `scripts/` 和 `references/` 是**同级目录**。所以各阶段统一调用
+> `genSkill/scripts/generate-skill.cjs`，避免复制多份 references。
 
 ### 3. 验证
 
@@ -120,9 +121,9 @@ for phase in brainstorming writing-plans writing-skills execute; do
   cp -R "skills/$phase" "$CLAUDE_SKILLS/genSkill-$phase"
 done
 
-# 脚本与能力清单跟 writing-skills 同级
-cp -R scripts "$CLAUDE_SKILLS/genSkill-writing-skills/scripts"
-cp -R references "$CLAUDE_SKILLS/genSkill-writing-skills/references"
+# 支持目录只放到入口 Skill 下；其他阶段通过 ../genSkill/... 读取
+cp -R scripts "$CLAUDE_SKILLS/genSkill/scripts"
+cp -R references "$CLAUDE_SKILLS/genSkill/references"
 ```
 
 装到某个项目而不是个人级，把 `$HOME/.claude` 换成
@@ -177,7 +178,7 @@ sed -i '' 's#generate-skill\.js#generate-skill.cjs#' \
 | 现象 | 原因 | 处理 |
 |------|------|------|
 | `Cannot find module .../generate-skill.js` | yaml 引用了不存在的 `.js` | 用 `.cjs`，见上节 |
-| 脚本报 `ENOENT references/capabilities` | `references/` 没和 `scripts/` 同级 | 两者一起复制到同一父目录 |
+| 脚本报 `ENOENT references/capabilities` | 运行的脚本旁边没有共享 `references/` | 调用 `../genSkill/scripts/generate-skill.cjs`，并确认 `genSkill/references/` 存在 |
 | 子技能被 `skipped` | 用到 `status: unsupported` 的能力 | 查 `references/capabilities/<id>.md`，改用受支持能力 |
 | `status: blocked` + `unsupported_capability` | 触到始终禁止的能力（付款/发消息给他人/删除发布/改账号） | 换成手动确认的替代做法 |
 | `status: blocked` + `dependency_cycle` | 子技能 `produces/consumes` 成环 | 回 writing-plans 修依赖关系 |

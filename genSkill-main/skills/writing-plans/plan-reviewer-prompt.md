@@ -22,7 +22,7 @@ apply whether you review inline or hand it to a subagent):
 | Category | What to Look For |
 |----------|------------------|
 | Field completeness | Every top-level field present and filled: user_goal, inputs_needed, schedule_or_trigger, memory_scope, output_or_delivery, confirmation_boundary, failure_handling, acceptance_criteria, capabilities_used. No empty values, no "TBD". Plus EITHER a `skills[]` array (each entry having id, role, user_goal, inputs_needed, capabilities_used, produces, consumes) OR — for a single-action legacy plan — a flat `steps[]`. Do NOT require `steps` on a `skills[]` plan; sub-skill workflow detail is authored later in writing-skills, not in the plan. |
-| Capability compliance | Every ID in capabilities_used (and in each `skills[].capabilities_used`) is listed under **Supported** in references/capabilities-summary.md. Flag any disabled or invented capability. |
+| Capability compliance | Every ID in capabilities_used (and in each `skills[].capabilities_used`) is listed under **Supported** in ../genSkill/references/capabilities-summary.md. Flag any disabled or invented capability. |
 | Capability coverage | Every sub-skill in `skills[]` (or every step in a legacy `steps[]`) is achievable by a listed capability. Flag any sub-skill/step that needs a capability not in the system. |
 | Data-contract consistency | For each `consumes` edge, the producing sub-skill's `produces` exists and its `produces_shape` (when present) contains every field the consumer needs. Flag a consumer that reads a field its upstream `produces_shape` does not provide, or a consumer reading structured fields off a producer that has no `produces_shape`. |
 | Plain-language purity | No system terms (记忆边界, 能力边界, schema, trigger), no capability IDs, no English technical terms (unless the user wrote in English). |
@@ -44,7 +44,7 @@ representations. Fix any gap, then re-check before proceeding.
 
 If (and only if) your runtime has a Task/subagent tool, you may hand the review to
 an independent reviewer instead of doing it inline. Pass the structured plan JSON,
-the plain-language description, and the path to `references/capabilities-summary.md`,
+the plain-language description, and the path to `../genSkill/references/capabilities-summary.md`,
 wrapped in this prompt. **Do not block on the result** — if no subagent tool
 exists, skip this entirely and review inline.
 
@@ -55,7 +55,7 @@ Verify both are ready, using the "What to Check" table and "Calibration" notes a
 
 Structured plan (JSON): [PLAN_JSON]
 Plain-language description: [PLAIN_LANGUAGE_TEXT]
-Capability reference: references/capabilities-summary.md
+Capability reference: ../genSkill/references/capabilities-summary.md
 
 Return:
 **Status:** Approved | Issues Found
